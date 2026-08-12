@@ -30,13 +30,10 @@
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "helmet": "^8.3.0",
-    "howlongtobeat-core": "^1.1.1",
-    "open": "^11.0.0",
     "react": "^18.3.1",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.3.1",
-    "systray2": "^2.1.4",
-    "vdf-parser": "^1.2.0"
+    "systray2": "^2.1.4"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

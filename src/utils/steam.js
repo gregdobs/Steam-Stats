@@ -445,3 +445,246 @@ export function computeBacklogByGenre(unplayedGames, genreData) {
   }
   return Object.entries(counts).sort(([, a], [, b]) => b - a);
 }
+
+// ─────────────────────────────────────────────
+// PERSONAL PERCENTILE  (§5.1 rebuild)
+//
+// Frames current activity against the user's OWN history rather than other
+// players — sidesteps needing other users' data and avoids the competitive-
+// leaderboard comparison anxiety that leaderboard-style stats invite.
+// "Top 15% of your days" style framing, computed from daily snapshot
+// deltas already saved for the History page / heatmap.
+//
+// Needs >=7 tracked days for a daily percentile, >=21 tracked days for a
+// week-level percentile (i.e. enough days to form ~3 comparable weeks).
+// Returns null below those minimums rather than a misleadingly precise
+// number from a tiny sample.
+//
+// NOTE: this logic was lost in a container reset before it could be
+// re-landed (see PROJECT_STATUS.md §5.1/§7) and has been rebuilt here from
+// the documented design rather than restored verbatim — re-verify against
+// synthetic data if that matters for your use case.
+// ─────────────────────────────────────────────
+
+function buildDailyDeltas(snapshots) {
+  const days = [];
+  for (let i = 1; i < snapshots.length; i++) {
+    const prev = snapshots[i - 1];
+    const curr = snapshots[i];
+    const daysDiff = (curr.timestamp - prev.timestamp) / (1000 * 60 * 60 * 24);
+    if (daysDiff > 3) continue; // skip big gaps — not a clean single-day delta
+
+    const prevMap = new Map((prev.games || []).map(g => [g.appid, g.playtime_forever]));
+    let minutes = 0;
+    for (const g of (curr.games || [])) {
+      const delta = g.playtime_forever - (prevMap.get(g.appid) || 0);
+      if (delta > 0) minutes += delta;
+    }
+    days.push({ date: curr.date, timestamp: curr.timestamp, minutes });
+  }
+  return days;
+}
+
+// "Percentage of the comparison pool this value beats or ties" — the
+// standard percentile-rank definition. Ties count as half-beaten so a
+// value tied with everything else lands at the 50th percentile, not 0 or 100.
+function percentileRank(value, pool) {
+  if (!pool || pool.length === 0) return null;
+  const below = pool.filter(v => v < value).length;
+  const tied = pool.filter(v => v === value).length;
+  return Math.round(((below + tied * 0.5) / pool.length) * 100);
+}
+
+function percentileLabel(pctile, unit) {
+  if (pctile === null) return null;
+  if (pctile >= 90) return `Top 10% of your ${unit}`;
+  if (pctile >= 75) return `Top 25% of your ${unit}`;
+  if (pctile <= 10) return `One of your quietest ${unit}`;
+  return null;
+}
+
+// Today's activity vs. every other tracked day.
+export function computeTodayPercentile(steamId) {
+  const days = buildDailyDeltas(steamId ? loadSnapshots(steamId) : []);
+  if (days.length < 7) return null;
+
+  const today = days[days.length - 1];
+  const history = days.slice(0, -1);
+  if (history.length === 0) return null;
+
+  const percentile = percentileRank(today.minutes, history.map(d => d.minutes));
+  return {
+    minutes: today.minutes,
+    percentile,
+    sampleSize: history.length,
+    label: percentileLabel(percentile, 'days'),
+  };
+}
+
+// This week (trailing 7 tracked days) vs. prior trailing weeks.
+export function computeWeeklyPercentile(steamId) {
+  const days = buildDailyDeltas(steamId ? loadSnapshots(steamId) : []);
+  if (days.length < 21) return null;
+
+  // Bucket into non-overlapping 7-day windows, oldest first
+  const weeks = [];
+  for (let i = 0; i + 7 <= days.length; i += 7) {
+    const chunk = days.slice(i, i + 7);
+    weeks.push({
+      minutes: chunk.reduce((s, d) => s + d.minutes, 0),
+      start: chunk[0].date,
+      end: chunk[chunk.length - 1].date,
+    });
+  }
+  if (weeks.length < 3) return null; // need at least a couple weeks of history to compare against
+
+  const thisWeek = weeks[weeks.length - 1];
+  const history = weeks.slice(0, -1);
+  const percentile = percentileRank(thisWeek.minutes, history.map(w => w.minutes));
+
+  return {
+    minutes: thisWeek.minutes,
+    percentile,
+    sampleSize: history.length,
+    label: percentileLabel(percentile, 'weeks'),
+  };
+}
+
+// ─────────────────────────────────────────────
+// PLAY STREAK WITH FORGIVENESS  (§5.2 rebuild)
+//
+// Built with a Duolingo-style "streak freeze" from day one rather than a
+// raw every-day-or-reset counter — GitHub's public contribution streak was
+// removed after backlash that it encouraged unhealthy daily grinding, which
+// this project's own earlier research flagged as a trap to avoid.
+//
+// A small number of "grace days" absorb missed days without resetting the
+// streak or fabricating playtime for that day — a grace day pauses the
+// streak, it does not extend it. This matches the semantics validated in
+// the bug-fix note in PROJECT_STATUS.md §4: a bridged gap should NOT count
+// as additional streak days.
+//
+// Also carries forward the off-by-one fix from that same session: the
+// walk-backward cursor and the earliest-tracked boundary are both
+// normalized to midnight before comparison. Comparing a midnight cursor
+// against a raw snapshot timestamp (which retains whatever time-of-day it
+// was saved at) caused the loop to exit one full day early whenever the
+// earliest snapshot happened to be saved after midnight — which is most of
+// the time.
+//
+// NOTE: rebuilt from the documented design after a container reset (see
+// PROJECT_STATUS.md §5.2/§7), not restored verbatim. The grace-day pool
+// here is a flat allowance rather than a "per rolling window" allowance —
+// the original session's exact windowing rule wasn't preserved in the
+// status doc in enough detail to reconstruct with confidence, so this is a
+// simpler, defensible stand-in. Revisit if you want grace days to refill
+// periodically rather than being a one-time budget.
+// ─────────────────────────────────────────────
+
+const STREAK_GRACE_DAYS = 2;
+
+function toMidnight(input) {
+  const d = new Date(input);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export function computePlayStreak(steamId) {
+  const snapshots = steamId ? loadSnapshots(steamId) : [];
+  if (snapshots.length < 2) return null;
+
+  const days = buildDailyDeltas(snapshots);
+  if (days.length === 0) return null;
+
+  const playedByDate = new Map(days.map(d => [d.date, d.minutes > 0]));
+
+  // FIX (carried from the original bug fix, extended after synthetic
+  // testing surfaced a related edge case): use the first day that actually
+  // HAS a computed delta as the walk boundary — not the raw first
+  // snapshot. buildDailyDeltas() can't produce a delta for the very first
+  // snapshot (there's no earlier snapshot to diff it against), so that day
+  // never appears in playedByDate. Using snapshots[0]'s timestamp as the
+  // boundary caused the walk to reach that untrackable day, find no entry,
+  // and spend a grace day on it — even on a perfectly clean streak with
+  // nothing actually missed. Verified via synthetic test: a clean 5-day
+  // streak was incorrectly reporting 1 grace day spent before this fix.
+  const earliestTracked = toMidnight(days[0].timestamp);
+
+  let cursor = toMidnight(Date.now());
+  let currentStreak = 0;
+  let graceDaysUsed = 0;
+
+  while (cursor >= earliestTracked) {
+    const played = !!playedByDate.get(cursor.toDateString());
+
+    if (played) {
+      currentStreak++;
+    } else if (graceDaysUsed < STREAK_GRACE_DAYS) {
+      // Spends a grace day: the streak survives the gap but this day does
+      // NOT count toward currentStreak — no playtime is invented for it.
+      graceDaysUsed++;
+    } else {
+      break;
+    }
+
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return {
+    currentStreak,
+    graceDaysUsed,
+    graceDaysAvailable: STREAK_GRACE_DAYS,
+    graceDaysRemaining: STREAK_GRACE_DAYS - graceDaysUsed,
+  };
+}
+
+// ─────────────────────────────────────────────
+// "WHAT SHOULD I PLAY TONIGHT"  (§5.3 rebuild)
+//
+// A lightweight recommender over data already fetched elsewhere — Backlog's
+// unplayed games, the shared HLTB cache, and cached genre tags. Filters by
+// an optional time budget and optional genre; ranks games with a known
+// short-enough HLTB estimate first, unknown-length games after (only when
+// there's no time budget to respect, since an unknown-length game can't be
+// verified to fit a budget).
+//
+// Deliberately fetches nothing new itself — meant to be an instant filter
+// over data the app already has, not another loading state.
+//
+// NOTE: rebuilt from the documented design after a container reset (see
+// PROJECT_STATUS.md §5.3/§7); this one was only "designed, not yet
+// implemented" per the status doc, so there's no lost implementation to
+// reconstruct — this is the first real version.
+// ─────────────────────────────────────────────
+
+export function recommendTonight(unplayedGames, hltbCache = {}, genreData = {}, options = {}) {
+  const { maxHours = null, genre = null } = options;
+
+  let pool = unplayedGames;
+  if (genre) {
+    pool = pool.filter(g => genreData[g.appid]?.genres?.includes(genre));
+  }
+
+  const withEstimate = [];
+  const withoutEstimate = [];
+
+  for (const game of pool) {
+    const hltb = hltbCache[game.name];
+    const hours = (hltb && !hltb.error && hltb.mainStory) ? hltb.mainStory : null;
+
+    if (hours != null) {
+      if (maxHours == null || hours <= maxHours) {
+        withEstimate.push({ ...game, estimateHours: hours });
+      }
+      // else: known length, but too long for the budget — excluded
+    } else {
+      withoutEstimate.push({ ...game, estimateHours: null });
+    }
+  }
+
+  withEstimate.sort((a, b) => a.estimateHours - b.estimateHours);
+
+  // Unknown-length games can't be confirmed to fit a time budget, so only
+  // include them when the user didn't ask for one.
+  return maxHours == null ? [...withEstimate, ...withoutEstimate] : withEstimate;
+}

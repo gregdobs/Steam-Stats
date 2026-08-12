@@ -75,14 +75,17 @@ console.log('Copying dist/...');
 copyRecursive(path.join(__dirname, 'dist'), path.join(RELEASE_DIR, 'dist'));
 
 // 6. Install production-only node_modules directly into release folder
-//    Only server.js's actual runtime imports are needed here — NOT the full
-//    dependency list from the main package.json, which includes frontend
-//    build-time packages (react, chart.js, vite, etc.) that the server
-//    never touches at runtime. Keeping this minimal keeps the release small.
-//    systray2 is included for tray-runner.cjs's hidden-console mode.
+//    Only server.js's + tray-runner.cjs's actual runtime imports belong
+//    here — NOT the full dependency list from the main package.json, which
+//    includes frontend build-time packages (react, chart.js, vite, etc.)
+//    the server never touches at runtime. Keeping this minimal keeps the
+//    release small.
+//    (Previously included 'open' here too, but neither server.js nor
+//    tray-runner.cjs actually import the 'open' package — both launch the
+//    browser via raw child_process.execFile calls. Dropped as dead weight.)
 console.log('\nInstalling production dependencies into release folder...');
 const mainPkgJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-const SERVER_RUNTIME_DEPS = ['express', 'cors', 'helmet', 'axios', 'open', 'systray2'];
+const SERVER_RUNTIME_DEPS = ['express', 'cors', 'helmet', 'axios', 'systray2'];
 const releaseDeps = {};
 for (const dep of SERVER_RUNTIME_DEPS) {
   if (mainPkgJson.dependencies[dep]) {

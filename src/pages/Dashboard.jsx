@@ -5,6 +5,8 @@ import { GameCapsule, GameHero } from '../components/GameImage.jsx';
 import StatCard from '../components/StatCard.jsx';
 import PlaytimeDonut from '../components/PlaytimeDonut.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
+import StreakAndPercentile from '../components/StreakAndPercentile.jsx';
+import TonightPick from '../components/TonightPick.jsx';
 
 function HeroGameCard({ game }) {
   const hours = minutesToHours(game.playtime_2weeks || game.playtime_forever || 0);
@@ -257,6 +259,10 @@ export default function Dashboard() {
   return (
     <div style={{ padding: '28px 24px', maxWidth: 1400, margin: '0 auto' }}>
 
+      {/* Streak + personal percentile — builds up once daily snapshots
+          accumulate; renders nothing until there's enough history */}
+      <StreakAndPercentile />
+
       {/* Summary stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 28 }}>
         <StatCard
@@ -340,6 +346,11 @@ export default function Dashboard() {
           <div onClick={(e) => handleSelectGame(heroGame, e)} style={{ cursor: 'pointer' }}>
             <HeroGameCard game={heroGame} />
           </div>
+
+          {/* What Should I Play Tonight — instant filter over the backlog,
+              sits below the hero/active-games section since it's about
+              what's NOT being played yet */}
+          <TonightPick />
 
           {/* Game grid — no layout shift, panel floats over */}
           {otherGames.length > 0 && (

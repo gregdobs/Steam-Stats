@@ -83,15 +83,23 @@ export function AppProvider({ children }) {
   // since achievements are Steam-API-specific per app).
   const [achCache, setAchCache] = useState(() => loadAchCacheFromStorage());
   const achInFlight = useRef(new Set());
+  // Mirrors achCache but updated synchronously inside the setAchCache
+  // updater itself, not via a separate effect. React state updates aren't
+  // reflected in the closure that scheduled them, so a caller doing
+  // `const data = await getAchievementsForGames(...)` would previously get
+  // back the *stale* achCache captured when the function was created,
+  // missing everything fetched during that same call. This ref always
+  // reflects the latest merged cache the moment it's computed.
+  const achCacheRef = useRef(achCache);
 
   // Fetches achievement data for a list of appIds, using the shared cache
   // and only hitting the API for whatever isn't already cached. Handles the
   // API's 20-appId-per-request batching internally.
   const getAchievementsForGames = useCallback(async (appIds, onProgress) => {
-    if (!config?.apiKey || !config?.steamId || !appIds || appIds.length === 0) return {};
+    if (!config?.apiKey || !config?.steamId || !appIds || appIds.length === 0) return achCacheRef.current;
 
     const toFetch = appIds.filter(id => achCache[id] === undefined && !achInFlight.current.has(id));
-    if (toFetch.length === 0) return achCache;
+    if (toFetch.length === 0) return achCacheRef.current;
 
     toFetch.forEach(id => achInFlight.current.add(id));
 
@@ -102,6 +110,7 @@ export function AppProvider({ children }) {
         setAchCache(prev => {
           const next = { ...prev, ...result };
           saveAchCacheToStorage(next);
+          achCacheRef.current = next; // keep the ref current before this batch's await
           return next;
         });
         batch.forEach(id => achInFlight.current.delete(id));
@@ -112,7 +121,7 @@ export function AppProvider({ children }) {
       toFetch.forEach(id => achInFlight.current.delete(id));
     }
 
-    return achCache;
+    return achCacheRef.current;
   }, [config?.apiKey, config?.steamId, achCache]);
 
   useEffect(() => {
