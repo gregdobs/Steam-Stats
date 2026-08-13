@@ -303,58 +303,6 @@ export function computeHistoricalTrends(steamId) {
 }
 
 // ─────────────────────────────────────────────
-// SESSION ESTIMATES (#3)
-// True session start/stop times aren't reliably available from Steam —
-// Steam's local logs are download/patch logs, not play-session logs.
-// Instead we estimate session count and average length from LaunchCount +
-// total playtime, which IS reliable data from localconfig.vdf.
-// This is clearly labeled as an ESTIMATE in the UI, not exact reconstruction.
-// ─────────────────────────────────────────────
-
-export function estimateSessionStats(game) {
-  const launches = game.launchCount;
-  const totalMinutes = game.playtime_forever || 0;
-  if (!launches || launches === 0 || totalMinutes === 0) return null;
-
-  const avgSessionMinutes = totalMinutes / launches;
-  return {
-    launches,
-    avgSessionMinutes: Math.round(avgSessionMinutes),
-    avgSessionHours: parseFloat((avgSessionMinutes / 60).toFixed(1)),
-    totalMinutes,
-  };
-}
-
-// Aggregate session estimates across the whole library — used for a
-// "typical session length" stat and a launches-vs-hours distribution.
-export function estimateLibrarySessionStats(ownedGames) {
-  const withLaunches = ownedGames.filter(g => g.launchCount > 0 && g.playtime_forever > 0);
-  if (withLaunches.length === 0) return null;
-
-  const totalLaunches = withLaunches.reduce((s, g) => s + g.launchCount, 0);
-  const totalMinutes = withLaunches.reduce((s, g) => s + g.playtime_forever, 0);
-  const avgSessionMinutes = totalMinutes / totalLaunches;
-
-  // Bucket games by their average session length
-  const buckets = { 'Quick (<30m)': 0, 'Short (30-90m)': 0, 'Medium (1.5-3h)': 0, 'Long (3h+)': 0 };
-  for (const g of withLaunches) {
-    const avg = g.playtime_forever / g.launchCount;
-    if (avg < 30) buckets['Quick (<30m)']++;
-    else if (avg < 90) buckets['Short (30-90m)']++;
-    else if (avg < 180) buckets['Medium (1.5-3h)']++;
-    else buckets['Long (3h+)']++;
-  }
-
-  return {
-    totalLaunches,
-    avgSessionMinutes: Math.round(avgSessionMinutes),
-    avgSessionHours: parseFloat((avgSessionMinutes / 60).toFixed(1)),
-    gamesWithData: withLaunches.length,
-    buckets,
-  };
-}
-
-// ─────────────────────────────────────────────
 // BACKLOG BURN-DOWN (#6)
 // Projects how long it would take to clear the unplayed library
 // at the user's current pace, derived from snapshot history.
