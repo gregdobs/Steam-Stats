@@ -38,8 +38,18 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       // Game cover art and hero images load directly from Steam's CDN, and
-      // player avatars load from a separate steamstatic subdomain.
-      imgSrc: ["'self'", "data:", "https://cdn.akamai.steamstatic.com", "https://cdn.cloudflare.steamstatic.com", "https://avatars.steamstatic.com", "https://avatars.akamai.steamstatic.com", "https://avatars.cloudflare.steamstatic.com"],
+      // player avatars load from a separate steamstatic subdomain. Steam
+      // fronts these with three edge providers (akamai/cloudflare/fastly),
+      // and newer titles' art additionally comes from the "shared" per-
+      // asset-hash path (see /api/steam/artwork-fallback below) rather than
+      // the flat cdn.* path — all of those need to be whitelisted or the
+      // browser silently drops the image in the packaged build.
+      imgSrc: [
+        "'self'", "data:",
+        "https://cdn.akamai.steamstatic.com", "https://cdn.cloudflare.steamstatic.com", "https://cdn.fastly.steamstatic.com",
+        "https://shared.akamai.steamstatic.com", "https://shared.cloudflare.steamstatic.com", "https://shared.fastly.steamstatic.com",
+        "https://avatars.steamstatic.com", "https://avatars.akamai.steamstatic.com", "https://avatars.cloudflare.steamstatic.com", "https://avatars.fastly.steamstatic.com",
+      ],
       connectSrc: ["'self'"],
       fontSrc: ["'self'", "data:"],
     },
