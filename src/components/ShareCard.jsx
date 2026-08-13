@@ -157,7 +157,7 @@ export default function ShareCard({ onClose }) {
     // ── Header ──
     ctx.fillStyle = '#3b82f6';
     ctx.font = '700 30px "Space Grotesk", sans-serif';
-    ctx.fillText('🎮 SteamStats', 60, 80);
+    ctx.fillText('🎮 Steam Stats', 60, 80);
 
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = '600 18px Inter, sans-serif';

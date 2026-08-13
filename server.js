@@ -887,7 +887,7 @@ if (distExists) {
 }
 
 app.listen(PORT, () => {
-  console.log(`\n🎮 Steam Dashboard Server running on http://localhost:${PORT}`);
+  console.log(`\n🎮 Steam Stats Server running on http://localhost:${PORT}`);
   const steamPaths = findSteamPaths();
   if (steamPaths.length > 0) {
     console.log(`✅ Steam installation found: ${steamPaths[0]}`);
