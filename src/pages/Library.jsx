@@ -369,7 +369,7 @@ export default function Library() {
       <div style={{ marginBottom: 40 }}>
         <PageHeader
           eyebrow="Library"
-          title={<><span style={{ fontWeight: 600 }}>{ownedGames.length.toLocaleString()} games</span> owned, {gamesPlayed.toLocaleString()} ever opened.</>}
+          title={<><span style={{ fontWeight: 600 }}>{ownedGames.length.toLocaleString()} games</span> owned, {gamesPlayed.toLocaleString()} ever played.</>}
           subtitle={
             <>
               {neverPlayedPct >= 1 ? `${neverPlayedPct}% of the library has never been launched.` : 'Nearly everything in the library has been launched at least once.'}
