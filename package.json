@@ -15,8 +15,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "concurrently \"npm run server\" \"vite --port 5173\"",
-    "build:exe": "npm run build && pkg . --output dist-exe/SteamStats",
-    "build:exe:win": "npm run build && pkg . --target node22-win-x64 --output dist-exe/SteamStats-win.exe",
+    "build:exe": "npm run build && pkg . --output 'dist-exe/Steam Stats'",
+    "build:exe:win": "npm run build && pkg . --target node22-win-x64 --output 'dist-exe/Steam Stats.exe'",
     "build:release": "node build-release.js"
   },
   "bin": "bootstrap.cjs",

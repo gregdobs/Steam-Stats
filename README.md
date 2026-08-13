@@ -1,4 +1,4 @@
-# 🎮 SteamStats
+# 🎮 Steam Stats
 
 A personal gaming analytics dashboard powered by the Steam Web API, HowLongToBeat, and (optionally) your local Steam installation.
 
@@ -45,7 +45,7 @@ node server.js
 ```
 You should see:
 ```
-🎮 Steam Dashboard Server running on http://localhost:3001
+🎮 Steam Stats Server running on http://localhost:3001
 ✅ Steam installation found: C:\Program Files (x86)\Steam
 ```
 
@@ -160,7 +160,7 @@ npm run build:release
 
 This runs everything automatically:
 1. Builds the frontend (`npm run build`)
-2. Compiles `bootstrap.cjs` into `SteamStats.exe` via pkg
+2. Compiles `bootstrap.cjs` into `Steam Stats.exe` via pkg
 3. Downloads a standalone `node.exe` to bundle alongside it (needed so the packaged app doesn't try to relaunch itself — only happens once, cached afterward)
 4. Copies `server.js`, `tray-runner.cjs`, and the built frontend alongside it
 5. Installs a minimal, server-only `node_modules` — just `express`, `cors`, `helmet`, `axios`, and `systray2`, not the full frontend dev dependency tree
@@ -168,7 +168,7 @@ This runs everything automatically:
 
 Output lands in `release/`. Zip that whole folder — that's the distributable.
 
-**Running it:** double-click **`Start SteamStats.vbs`** — no console window appears, but a tray icon shows up near the clock, and a browser tab opens automatically. Right-click the tray icon for Open/Quit. If something's not working and you want to see what's happening, use **`Start SteamStats (debug).bat`** instead — it keeps a visible console window with logs.
+**Running it:** double-click **`Start Steam Stats.vbs`** — no console window appears, but a tray icon shows up near the clock, and a browser tab opens automatically. Right-click the tray icon for Open/Quit. If something's not working and you want to see what's happening, use **`Start Steam Stats (debug).bat`** instead — it keeps a visible console window with logs.
 
 **Why not a single file?** pkg's executable alone can't reliably include `node_modules` (native bindings, dynamic requires, and file-size bloat make that fragile). Shipping `server.js` + `dist/` + a minimal `node_modules` alongside a small bootstrap `.exe` is the standard, reliable pattern — the folder is still just one download, one zip, one double-click for whoever you send it to.
 

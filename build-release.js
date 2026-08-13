@@ -3,11 +3,12 @@
 // build-release.js
 // Assembles a complete, double-click-ready Windows distribution:
 //   release/
-//     SteamStats.exe
+//     Steam Stats.exe
 //     server.js
 //     dist/            (built frontend)
 //     node_modules/     (production deps only, pruned)
-//     Start SteamStats.bat
+//     Start Steam Stats.vbs
+//     Start Steam Stats (debug).bat
 //     README.txt
 //
 // Run with: node build-release.js
@@ -30,7 +31,7 @@ function copyRecursive(src, dest) {
   fs.cpSync(src, dest, { recursive: true });
 }
 
-console.log('🎮 Building SteamStats Windows release...\n');
+console.log('🎮 Building Steam Stats Windows release...\n');
 
 // 1. Clean previous release
 if (fs.existsSync(RELEASE_DIR)) {
@@ -43,7 +44,10 @@ fs.mkdirSync(RELEASE_DIR, { recursive: true });
 run('npm run build');
 
 // 3. Compile the pkg executable
-run('npx @yao-pkg/pkg . --target node22-win-x64 --output release/SteamStats.exe');
+// Quoted — the output path now contains a space ("Steam Stats.exe"), and
+// this string goes through a shell via execSync, so it needs quoting or
+// pkg would see "release/Steam" and "Stats.exe" as two separate arguments.
+run('npx @yao-pkg/pkg . --target node22-win-x64 --output "release/Steam Stats.exe"');
 
 // 3b. Download a real, standalone node.exe to bundle alongside the release.
 //     bootstrap.cjs spawns THIS binary to run server.js — NOT
@@ -80,9 +84,6 @@ copyRecursive(path.join(__dirname, 'dist'), path.join(RELEASE_DIR, 'dist'));
 //    includes frontend build-time packages (react, chart.js, vite, etc.)
 //    the server never touches at runtime. Keeping this minimal keeps the
 //    release small.
-//    (Previously included 'open' here too, but neither server.js nor
-//    tray-runner.cjs actually import the 'open' package — both launch the
-//    browser via raw child_process.execFile calls. Dropped as dead weight.)
 console.log('\nInstalling production dependencies into release folder...');
 const mainPkgJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const SERVER_RUNTIME_DEPS = ['express', 'cors', 'helmet', 'axios', 'systray2'];
@@ -111,48 +112,48 @@ console.log('\nCopying tray-runner.cjs...');
 fs.copyFileSync(path.join(__dirname, 'tray-runner.cjs'), path.join(RELEASE_DIR, 'tray-runner.cjs'));
 
 // 7. Write launchers.
-//    PRIMARY: a .vbs wrapper that launches SteamStats.exe with a hidden
+//    PRIMARY: a .vbs wrapper that launches Steam Stats.exe with a hidden
 //    window — this is the actual "no visible console" entry point, since
 //    pkg's compiled .exe is a console-subsystem binary that always flashes
 //    a window when double-clicked directly, and setting windowsHide on a
 //    spawned CHILD doesn't hide the PARENT's own console.
-//    FALLBACK: the original .bat, kept as a visible-console troubleshooting
-//    option — if the hidden version misbehaves, this shows exactly what's
-//    happening, which matters given how much trial-and-error this bundling
-//    approach has already needed.
+//    FALLBACK: a visible-console troubleshooting option — if the hidden
+//    version misbehaves, this shows exactly what's happening, which
+//    matters given how much trial-and-error this bundling approach has
+//    already needed.
 console.log('\nWriting launcher scripts...');
 
-fs.writeFileSync(path.join(RELEASE_DIR, 'Start SteamStats.vbs'), `' SteamStats silent launcher — runs SteamStats.exe with no visible console window.
-' Use "Start SteamStats (debug).bat" instead if you need to see startup logs
+fs.writeFileSync(path.join(RELEASE_DIR, 'Start Steam Stats.vbs'), `' Steam Stats silent launcher — runs Steam Stats.exe with no visible console window.
+' Use "Start Steam Stats (debug).bat" instead if you need to see startup logs
 ' or something isn't working.
 Set objShell = CreateObject("WScript.Shell")
 objShell.CurrentDirectory = CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName)
-objShell.Run """SteamStats.exe""", 0, False
+objShell.Run """Steam Stats.exe""", 0, False
 `);
 
-fs.writeFileSync(path.join(RELEASE_DIR, 'Start SteamStats (debug).bat'), `@echo off
-title SteamStats (debug mode)
+fs.writeFileSync(path.join(RELEASE_DIR, 'Start Steam Stats (debug).bat'), `@echo off
+title Steam Stats (debug mode)
 cd /d "%~dp0"
-echo Starting SteamStats in debug mode...
+echo Starting Steam Stats in debug mode...
 echo This window shows startup logs and stays open so you can see errors.
 echo A browser window will open automatically once the server is ready.
 echo.
-"SteamStats.exe"
+"Steam Stats.exe"
 pause
 `);
 
 // 8. Write a short README for the release folder
-fs.writeFileSync(path.join(RELEASE_DIR, 'README.txt'), `SteamStats
-==========
+fs.writeFileSync(path.join(RELEASE_DIR, 'README.txt'), `Steam Stats
+===========
 
 HOW TO RUN:
-1. Double-click "Start SteamStats.vbs" — no window will appear, but a
+1. Double-click "Start Steam Stats.vbs" — no window will appear, but a
    tray icon shows up near your clock. Your browser opens automatically.
-2. Right-click the tray icon for "Open SteamStats" or "Quit".
+2. Right-click the tray icon for "Open Steam Stats" or "Quit".
 
 TROUBLESHOOTING:
 If the .vbs launcher doesn't seem to do anything, or you want to see what's
-happening during startup, use "Start SteamStats (debug).bat" instead — it
+happening during startup, use "Start Steam Stats (debug).bat" instead — it
 keeps a console window open showing logs and any error messages.
 
 FIRST-TIME SETUP:
@@ -171,7 +172,7 @@ requires the app to find your Steam installation automatically, or you can
 set a custom path in Settings > Local Steam Path.
 
 This folder is self-contained — you can move it anywhere, but keep all the
-files together (don't move SteamStats.exe out on its own). It includes its
+files together (don't move Steam Stats.exe out on its own). It includes its
 own Node.js runtime (node.exe), so nothing else needs to be installed on
 this computer.
 `);
@@ -179,5 +180,5 @@ this computer.
 console.log('\n✅ Release built successfully!');
 console.log(`📦 Distributable folder: ${RELEASE_DIR}`);
 console.log('\nTo distribute: zip the entire "release" folder and share it.');
-console.log('Users unzip it and double-click "Start SteamStats.vbs" — no console window,');
+console.log('Users unzip it and double-click "Start Steam Stats.vbs" — no console window,');
 console.log('a tray icon appears near the clock with Open/Quit options.');

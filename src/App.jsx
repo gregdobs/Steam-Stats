@@ -26,7 +26,7 @@ function LoadingOverlay() {
       }}>🎮</div>
       <div style={{ textAlign: 'center' }}>
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
-          Steam<span style={{ color: 'var(--accent-blue)' }}>Stats</span>
+          Steam <span style={{ color: 'var(--accent-blue)' }}>Stats</span>
         </h2>
         <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>{loadingPhase || 'Loading...'}</p>
       </div>
