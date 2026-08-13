@@ -82,7 +82,7 @@ export function GameHeader({ appId, name, style = {} }) {
     return (
       <div style={{
         width: '100%', height: '100%',
-        background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+        background: 'linear-gradient(135deg, var(--bg-tertiary), var(--border-strong))',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         ...style,
       }}>

@@ -2,8 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { Chart, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler, BarElement, BarController, LineController } from 'chart.js';
 import { useApp } from '../hooks/useAppContext.jsx';
 import { loadSnapshots, formatHours } from '../utils/steam.js';
+import { ACCENT_HEX, hexToRgba, PageHeader } from '../components/designSystem.jsx';
 
 Chart.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler, BarElement, BarController, LineController);
+
+// Chart.js can't consume CSS var() strings directly, so read the theme's
+// resolved values at draw time instead of hardcoding a second light/dark
+// palette here.
+function readThemeColor(varName, fallback) {
+  if (typeof document === 'undefined') return fallback;
+  const v = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  return v || fallback;
+}
 
 function TrendChart({ trends, theme }) {
   const canvasRef = useRef(null);
@@ -13,9 +23,8 @@ function TrendChart({ trends, theme }) {
     if (!canvasRef.current || !trends || trends.length < 2) return;
     if (chartRef.current) chartRef.current.destroy();
 
-    const isDark = theme === 'dark';
-    const textColor = isDark ? '#94a3b8' : '#64748b';
-    const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+    const textColor = readThemeColor('--text-muted', '#9a9084');
+    const gridColor = readThemeColor('--border-subtle', 'rgba(42,38,33,0.07)');
 
     const labels = trends.map(t => {
       const d = new Date(t.timestamp);
@@ -29,13 +38,13 @@ function TrendChart({ trends, theme }) {
         datasets: [{
           label: 'Hours played',
           data: trends.map(t => t.hoursPlayed),
-          borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59,130,246,0.1)',
+          borderColor: ACCENT_HEX,
+          backgroundColor: hexToRgba(ACCENT_HEX, 0.1),
           fill: true,
           tension: 0.4,
           pointRadius: 4,
           pointHoverRadius: 6,
-          pointBackgroundColor: '#3b82f6',
+          pointBackgroundColor: ACCENT_HEX,
           borderWidth: 2,
         }]
       },
@@ -134,10 +143,10 @@ function PlayHeatmap({ snapshots, ownedGames }) {
   const getColor = (minutes) => {
     if (minutes === 0) return 'var(--bg-tertiary)';
     const intensity = Math.min(minutes / maxMinutes, 1);
-    if (intensity < 0.25) return 'rgba(59,130,246,0.25)';
-    if (intensity < 0.5) return 'rgba(59,130,246,0.5)';
-    if (intensity < 0.75) return 'rgba(59,130,246,0.75)';
-    return 'rgba(59,130,246,1)';
+    if (intensity < 0.25) return hexToRgba(ACCENT_HEX, 0.25);
+    if (intensity < 0.5) return hexToRgba(ACCENT_HEX, 0.5);
+    if (intensity < 0.75) return hexToRgba(ACCENT_HEX, 0.75);
+    return hexToRgba(ACCENT_HEX, 1);
   };
 
   const monthLabels = [];
@@ -191,7 +200,7 @@ function PlayHeatmap({ snapshots, ownedGames }) {
                     width: cellSize, height: cellSize,
                     borderRadius: 2,
                     background: getColor(day.minutes),
-                    border: day.minutes > 0 ? '1px solid rgba(59,130,246,0.2)' : '1px solid var(--border-subtle)',
+                    border: day.minutes > 0 ? `1px solid ${hexToRgba(ACCENT_HEX, 0.2)}` : '1px solid var(--border-subtle)',
                     cursor: day.minutes > 0 ? 'default' : 'default',
                     transition: 'transform 0.1s',
                   }}
@@ -210,7 +219,7 @@ function PlayHeatmap({ snapshots, ownedGames }) {
         {[0, 0.25, 0.5, 0.75, 1].map(i => (
           <div key={i} style={{
             width: cellSize, height: cellSize, borderRadius: 2,
-            background: i === 0 ? 'var(--bg-tertiary)' : `rgba(59,130,246,${i})`,
+            background: i === 0 ? 'var(--bg-tertiary)' : hexToRgba(ACCENT_HEX, i),
             border: '1px solid var(--border-subtle)',
           }} />
         ))}
@@ -286,14 +295,17 @@ export default function History() {
     : null;
 
   return (
-    <div style={{ padding: '28px 24px', maxWidth: 1400, margin: '0 auto' }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-          Play History
-        </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-          Trends built from {totalSessions} local snapshot{totalSessions !== 1 ? 's' : ''} · Accumulates over time
-        </p>
+    <div style={{ padding: '56px 24px 96px', maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ marginBottom: 40 }}>
+        <PageHeader
+          eyebrow="History"
+          title={
+            totalDaysTracked > 0
+              ? <><span style={{ fontWeight: 600 }}>{totalDaysTracked} days</span> tracked, across {totalSessions} snapshot{totalSessions !== 1 ? 's' : ''}.</>
+              : 'Play History'
+          }
+          subtitle="Accumulates the longer you use the app — trends, heatmap, and streaks all build from these daily snapshots."
+        />
       </div>
 
       {/* Stats */}

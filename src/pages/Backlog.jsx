@@ -6,13 +6,14 @@ import {
 } from '../utils/steam.js';
 import { GameHeader } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
+import { categoryColor, PageHeader } from '../components/designSystem.jsx';
 
-const GENRE_COLORS = {
-  'Action': '#f43f5e', 'Adventure': '#f59e0b', 'RPG': '#8b5cf6', 'Strategy': '#3b82f6',
-  'Simulation': '#10b981', 'Sports': '#06b6d4', 'Racing': '#fb923c', 'Indie': '#84cc16',
-  'Casual': '#e879f9', 'Massively Multiplayer': '#6366f1', 'Free to Play': '#94a3b8', 'Early Access': '#eab308',
-};
-const getGenreColor = (g) => GENRE_COLORS[g] || '#64748b';
+// Stable per-genre color: hashed by name into the shared 5-color warm palette.
+function getGenreColor(genre) {
+  let hash = 0;
+  for (let i = 0; i < genre.length; i++) hash = (hash * 31 + genre.charCodeAt(i)) | 0;
+  return categoryColor(Math.abs(hash));
+}
 
 // ── Severity tiers for the headline projection ─────────────────────────────
 const getTier = (years) => {
@@ -223,13 +224,20 @@ export default function Backlog() {
   const hltbCoveragePct = Math.round((gamesWithRealEstimate / unplayedCount) * 100);
 
   return (
-    <div style={{ padding: '28px 24px', maxWidth: 1400, margin: '0 auto' }}>
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Backlog</h1>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-          {unplayedCount.toLocaleString()} unplayed games
-          {gamesWithRealEstimate > 0 && ` · ${hltbCoveragePct}% have real completion estimates`}
-        </p>
+    <div style={{ padding: '56px 24px 96px', maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ marginBottom: 40 }}>
+        <PageHeader
+          eyebrow="Backlog"
+          title={
+            <>
+              <span style={{ fontWeight: 600 }}>{unplayedCount.toLocaleString()} games</span> unplayed.
+              {tier && (yearsNeeded < 1
+                ? <> At your current pace, about <span style={{ fontWeight: 600 }}>{weeksNeeded} weeks</span> to clear.</>
+                : <> At your current pace, about <span style={{ fontWeight: 600 }}>{yearsNeeded} years</span> to clear.</>)}
+            </>
+          }
+          subtitle={gamesWithRealEstimate > 0 ? `${hltbCoveragePct}% have real HowLongToBeat completion estimates.` : undefined}
+        />
       </div>
 
       {/* Headline projection + momentum */}
@@ -239,7 +247,7 @@ export default function Backlog() {
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
               Projected at your current pace — a rough estimate, not a prediction.
             </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px', borderRadius: 'var(--radius-lg)', background: `${tier.color}12`, border: `1px solid ${tier.color}30` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px', borderRadius: 'var(--radius-lg)', background: `color-mix(in srgb, ${tier.color} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${tier.color} 30%, transparent)` }}>
               <div style={{ fontSize: 44, flexShrink: 0 }}>{tier.emoji}</div>
               <div>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: tier.color, lineHeight: 1.1 }}>
