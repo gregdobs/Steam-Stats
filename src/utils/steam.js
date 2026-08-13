@@ -455,10 +455,12 @@ export function computeBacklogByGenre(unplayedGames, genreData) {
 // "Top 15% of your days" style framing, computed from daily snapshot
 // deltas already saved for the History page / heatmap.
 //
-// Needs >=7 tracked days for a daily percentile, >=21 tracked days for a
-// week-level percentile (i.e. enough days to form ~3 comparable weeks).
-// Returns null below those minimums rather than a misleadingly precise
-// number from a tiny sample.
+// computeWindowPercentile generalizes this to an arbitrary trailing window
+// (7/14/30 days, to match the Dashboard's period switcher) by bucketing
+// tracked days into non-overlapping windows of that length and ranking the
+// most recent window against prior ones. Needs >=3 comparable windows;
+// returns null below that rather than a misleadingly precise number from a
+// tiny sample.
 //
 // NOTE: this logic was lost in a container reset before it could be
 // re-landed (see PROJECT_STATUS.md §5.1/§7) and has been rebuilt here from
@@ -503,51 +505,92 @@ function percentileLabel(pctile, unit) {
   return null;
 }
 
-// Today's activity vs. every other tracked day.
-export function computeTodayPercentile(steamId) {
+const WINDOW_UNIT_LABELS = {
+  1: 'days',
+  7: 'weeks',
+  14: 'two-week stretches',
+  30: '30-day stretches',
+};
+
+// The trailing `windowDays`-length stretch vs. prior non-overlapping
+// stretches of the same length — e.g. windowDays=7 reproduces "this week
+// vs. prior weeks", windowDays=14 compares trailing fortnights, etc.
+export function computeWindowPercentile(steamId, windowDays) {
   const days = buildDailyDeltas(steamId ? loadSnapshots(steamId) : []);
-  if (days.length < 7) return null;
+  if (days.length < windowDays * 3) return null;
 
-  const today = days[days.length - 1];
-  const history = days.slice(0, -1);
-  if (history.length === 0) return null;
-
-  const percentile = percentileRank(today.minutes, history.map(d => d.minutes));
-  return {
-    minutes: today.minutes,
-    percentile,
-    sampleSize: history.length,
-    label: percentileLabel(percentile, 'days'),
-  };
-}
-
-// This week (trailing 7 tracked days) vs. prior trailing weeks.
-export function computeWeeklyPercentile(steamId) {
-  const days = buildDailyDeltas(steamId ? loadSnapshots(steamId) : []);
-  if (days.length < 21) return null;
-
-  // Bucket into non-overlapping 7-day windows, oldest first
-  const weeks = [];
-  for (let i = 0; i + 7 <= days.length; i += 7) {
-    const chunk = days.slice(i, i + 7);
-    weeks.push({
+  const windows = [];
+  for (let i = 0; i + windowDays <= days.length; i += windowDays) {
+    const chunk = days.slice(i, i + windowDays);
+    windows.push({
       minutes: chunk.reduce((s, d) => s + d.minutes, 0),
       start: chunk[0].date,
       end: chunk[chunk.length - 1].date,
     });
   }
-  if (weeks.length < 3) return null; // need at least a couple weeks of history to compare against
+  if (windows.length < 3) return null; // need at least a couple stretches of history to compare against
 
-  const thisWeek = weeks[weeks.length - 1];
-  const history = weeks.slice(0, -1);
-  const percentile = percentileRank(thisWeek.minutes, history.map(w => w.minutes));
+  const current = windows[windows.length - 1];
+  const history = windows.slice(0, -1);
+  const percentile = percentileRank(current.minutes, history.map(w => w.minutes));
 
   return {
-    minutes: thisWeek.minutes,
+    minutes: current.minutes,
     percentile,
     sampleSize: history.length,
-    label: percentileLabel(percentile, 'weeks'),
+    label: percentileLabel(percentile, WINDOW_UNIT_LABELS[windowDays] || `${windowDays}-day periods`),
   };
+}
+
+// Zero-filled trailing daily playtime series (today inclusive) for the bar
+// strip in the Dashboard hero. Days with no snapshot coverage show as 0
+// rather than being omitted, so the strip always has exactly `days` bars.
+export function getDailyPlaytimeSeries(steamId, days) {
+  const snapshots = steamId ? loadSnapshots(steamId) : [];
+  if (snapshots.length < 2) return [];
+
+  const byDate = new Map(buildDailyDeltas(snapshots).map(d => [d.date, d.minutes]));
+
+  const series = [];
+  const cursor = toMidnight(Date.now());
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(cursor);
+    d.setDate(d.getDate() - i);
+    const dateKey = d.toDateString();
+    series.push({ date: dateKey, timestamp: d.getTime(), minutes: byDate.get(dateKey) || 0 });
+  }
+  return series;
+}
+
+// Same idea as getDailyPlaytimeSeries but scoped to one game's playtime_forever
+// delta between consecutive snapshots — powers the "In Focus" card's sparkline.
+export function getDailyPlaytimeSeriesForGame(steamId, appid, days) {
+  const snapshots = steamId ? loadSnapshots(steamId) : [];
+  if (snapshots.length < 2) return [];
+
+  const byDate = new Map();
+  for (let i = 1; i < snapshots.length; i++) {
+    const prev = snapshots[i - 1];
+    const curr = snapshots[i];
+    const daysDiff = (curr.timestamp - prev.timestamp) / (1000 * 60 * 60 * 24);
+    if (daysDiff > 3) continue;
+
+    const currGame = (curr.games || []).find(g => g.appid === appid);
+    if (!currGame) continue;
+    const prevGame = (prev.games || []).find(g => g.appid === appid);
+    const delta = currGame.playtime_forever - (prevGame?.playtime_forever || 0);
+    if (delta > 0) byDate.set(curr.date, delta);
+  }
+
+  const series = [];
+  const cursor = toMidnight(Date.now());
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(cursor);
+    d.setDate(d.getDate() - i);
+    const dateKey = d.toDateString();
+    series.push({ date: dateKey, timestamp: d.getTime(), minutes: byDate.get(dateKey) || 0 });
+  }
+  return series;
 }
 
 // ─────────────────────────────────────────────

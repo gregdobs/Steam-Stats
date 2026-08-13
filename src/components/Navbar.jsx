@@ -24,13 +24,36 @@ function saveFeatureFlags(flags) {
 
 export { loadFeatureFlags, saveFeatureFlags, ALL_TIME_PERIODS, FEATURE_FLAGS_KEY };
 
+// Thin line-art icons (stroke, no fill) matching the redesign's icon language —
+// replaces the old emoji glyphs. `currentColor` picks up each nav button's text color.
+const NAV_ICONS = {
+  dashboard: (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="2" y="2" width="5" height="5" rx="1.2"></rect><rect x="9" y="2" width="5" height="5" rx="1.2"></rect><rect x="2" y="9" width="5" height="5" rx="1.2"></rect><rect x="9" y="9" width="5" height="5" rx="1.2"></rect></svg>
+  ),
+  library: (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><rect x="2.5" y="2.5" width="4" height="11" rx="1.2"></rect><rect x="9.5" y="2.5" width="4" height="11" rx="1.2"></rect></svg>
+  ),
+  backlog: (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M8 2.5v7"></path><path d="M5 7l3 3 3-3"></path><path d="M2.5 12.5h11"></path></svg>
+  ),
+  achievements: (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="8" cy="6.5" r="4"></circle><path d="M5.6 10l-1 4L8 12.4 11.4 14l-1-4"></path></svg>
+  ),
+  hltb: (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="8" cy="8" r="5.5"></circle><circle cx="8" cy="8" r="1.6"></circle></svg>
+  ),
+  history: (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 11.5l3.5-4 3 2.5 4.5-6"></path></svg>
+  ),
+};
+
 const NAV_ITEMS = [
-  { id: 'dashboard',    label: 'Dashboard',    icon: '⊞' },
-  { id: 'library',      label: 'Library',      icon: '📚' },
-  { id: 'backlog',      label: 'Backlog',      icon: '📥' },
-  { id: 'achievements', label: 'Achievements', icon: '🏆' },
-  { id: 'hltb',         label: 'Completion',   icon: '🎯' },
-  { id: 'history',      label: 'History',      icon: '📈' },
+  { id: 'dashboard',    label: 'Dashboard' },
+  { id: 'library',      label: 'Library' },
+  { id: 'backlog',      label: 'Backlog' },
+  { id: 'achievements', label: 'Achievements' },
+  { id: 'hltb',         label: 'Completion' },
+  { id: 'history',      label: 'History' },
 ];
 
 function getConnectionStatus(profile, dataLoaded) {
@@ -56,13 +79,14 @@ function SourceBadge({ source, active }) {
   const isApi = source === 'api';
   return (
     <span style={{
-      fontSize: 8, fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase',
+      fontFamily: 'var(--font-mono)',
+      fontSize: 8, fontWeight: 500, letterSpacing: '0.4px', textTransform: 'uppercase',
       padding: '1px 4px', borderRadius: 3, lineHeight: 1.4, transition: 'all 0.15s',
       background: active
-        ? (isApi ? 'rgba(59,130,246,0.25)' : 'rgba(139,92,246,0.25)')
+        ? (isApi ? 'rgba(180,98,60,0.2)' : 'rgba(138,107,143,0.2)')
         : 'rgba(128,128,128,0.15)',
       color: active
-        ? (isApi ? '#93c5fd' : '#c4b5fd')
+        ? (isApi ? '#8f4b2d' : '#6b5470')
         : 'var(--text-muted)',
     }}>
       {isApi ? 'API' : 'SNP'}
@@ -105,8 +129,8 @@ export default function Navbar() {
     <>
       <nav style={{
         position: 'sticky', top: 0, zIndex: 100,
-        background: theme === 'dark' ? 'rgba(8,12,20,0.88)' : 'rgba(248,250,252,0.88)',
-        backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+        background: theme === 'dark' ? 'rgba(28,23,18,0.88)' : 'rgba(246,243,238,0.86)',
+        backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
         borderBottom: '1px solid var(--border-subtle)',
         height: 'var(--nav-height)',
         display: 'flex', alignItems: 'center',
@@ -114,29 +138,29 @@ export default function Navbar() {
       }}>
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🎮</div>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
-            Steam<span style={{ color: 'var(--accent-blue)' }}>Stats</span>
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="var(--accent-blue)" strokeWidth="1.6" strokeLinecap="round"><circle cx="10" cy="10" r="7.2"></circle><path d="M10 5.4V10l3 2"></path></svg>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
+            Steam Stats
           </span>
         </div>
 
         {/* Nav items */}
         {dataLoaded && (
-          <div style={{ display: 'flex', gap: 2, flex: 1 }}>
+          <div style={{ display: 'flex', gap: 4, flex: 1 }}>
             {NAV_ITEMS.map(item => (
               <button key={item.id} onClick={() => setActivePage(item.id)} style={{
                 background: activePage === item.id ? 'var(--accent-blue-dim)' : 'transparent',
-                border: 'none', borderRadius: 'var(--radius-md)', padding: '6px 12px',
+                border: 'none', borderRadius: 9, padding: '7px 12px',
                 cursor: 'pointer',
-                color: activePage === item.id ? 'var(--accent-blue)' : 'var(--text-secondary)',
-                fontSize: 13, fontWeight: activePage === item.id ? 600 : 400,
+                color: activePage === item.id ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontSize: 13.5, fontWeight: activePage === item.id ? 500 : 400,
                 fontFamily: 'var(--font-body)', transition: 'all 0.15s ease',
-                display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+                display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap',
               }}
                 onMouseEnter={e => { if (activePage !== item.id) e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
                 onMouseLeave={e => { if (activePage !== item.id) e.currentTarget.style.background = 'transparent'; }}
               >
-                <span style={{ fontSize: 13 }}>{item.icon}</span>{item.label}
+                <span style={{ display: 'flex', color: activePage === item.id ? 'var(--accent-blue)' : 'currentColor' }}>{NAV_ICONS[item.id]}</span>{item.label}
               </button>
             ))}
           </div>
@@ -149,7 +173,7 @@ export default function Navbar() {
           <div style={{ position: 'relative' }}>
             <div style={{
               display: 'flex', gap: 2, padding: 3,
-              background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)',
+              background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-full)',
               border: '1px solid var(--border-subtle)',
             }}>
               {enabledPeriods.map(p => {
@@ -164,16 +188,16 @@ export default function Navbar() {
                     style={{
                       background: isActive ? 'var(--bg-secondary)' : 'transparent',
                       border: isActive ? '1px solid var(--border-default)' : '1px solid transparent',
-                      borderRadius: 'calc(var(--radius-md) - 2px)',
-                      padding: '4px 10px',
+                      borderRadius: 'var(--radius-full)',
+                      padding: '4px 11px',
                       cursor: 'pointer',
                       color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
-                      fontFamily: 'var(--font-body)', transition: 'all 0.15s ease',
+                      fontFamily: 'var(--font-mono)', transition: 'all 0.15s ease',
                       boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
                       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
                     }}
                   >
-                    <span style={{ fontSize: 12, fontWeight: isActive ? 600 : 400, lineHeight: 1 }}>{p.label}</span>
+                    <span style={{ fontSize: 11.5, fontWeight: isActive ? 500 : 400, lineHeight: 1 }}>{p.label}</span>
                     <SourceBadge source={p.source} active={isActive} />
                   </button>
                 );

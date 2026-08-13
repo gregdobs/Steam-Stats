@@ -30,16 +30,17 @@ export default function SetupScreen() {
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <div style={{
             width: 64, height: 64, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+            background: 'var(--accent-blue-dim)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 28, margin: '0 auto 20px',
-            boxShadow: '0 8px 32px rgba(59, 130, 246, 0.3)',
-          }}>🎮</div>
+            margin: '0 auto 20px',
+          }}>
+            <svg width="30" height="30" viewBox="0 0 20 20" fill="none" stroke="var(--accent-blue)" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="10" r="7.2"></circle><path d="M10 5.4V10l3 2"></path></svg>
+          </div>
           <h1 style={{
-            fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700,
+            fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600,
             color: 'var(--text-primary)', letterSpacing: '-0.5px', marginBottom: 8
           }}>
-            Steam<span style={{ color: 'var(--accent-blue)' }}>Stats</span>
+            Steam Stats
           </h1>
           <p style={{ fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
             A best-in-class view of your gaming life.<br />
