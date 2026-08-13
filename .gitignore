@@ -32,3 +32,16 @@ dist-ssr
 # Release build output
 dist-exe/
 release/
+
+# Claude Code — personal machine overrides shouldn't be shared;
+# CLAUDE.md itself (project memory) is meant to be committed
+.claude/settings.local.json
+
+# Env files — not currently used, but ignored preemptively so a future
+# local secret never ends up committed by accident
+.env
+.env.local
+
+# Delivery zips from chat sessions — meant to be unzipped and discarded,
+# not committed
+*.zip

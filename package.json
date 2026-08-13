@@ -2,7 +2,13 @@
   "name": "steam-dashboard",
   "private": true,
   "version": "1.0.0",
+  "description": "A personal gaming analytics dashboard powered by the Steam Web API, HowLongToBeat, and your local Steam installation.",
+  "author": "Greg",
+  "license": "UNLICENSED",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "concurrently \"npm run server\" \"vite --port 5173\"",
     "server": "node server.js",
