@@ -169,7 +169,7 @@ export default function Navbar() {
         <div style={{ flex: dataLoaded ? 0 : 1 }} />
 
         {/* Time period toggle */}
-        {dataLoaded && activePage === 'dashboard' && (
+        {dataLoaded && (
           <div style={{ position: 'relative' }}>
             <div style={{
               display: 'flex', gap: 2, padding: 3,
