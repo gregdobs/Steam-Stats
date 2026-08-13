@@ -348,6 +348,39 @@ app.get('/api/steam/achievements-batch', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
+// ARTWORK FALLBACK
+// The flat cdn.akamai.steamstatic.com/steam/apps/{appid}/{file}.jpg paths
+// GameImage.jsx tries first 404 for some newer titles (Steam has migrated
+// those assets to a per-asset-hash path under shared.akamai.steamstatic.com
+// /store_item_assets/...). The store appdetails API returns the current
+// hashed URLs directly, so this is a last-resort lookup for when every flat
+// CDN guess has already failed — cached in-memory since it's a static
+// per-appid result and the store API doesn't send CORS headers, so it can't
+// be called directly from the browser.
+// ─────────────────────────────────────────────
+const artworkFallbackCache = new Map();
+
+app.get('/api/steam/artwork-fallback', async (req, res) => {
+  const { appid } = req.query;
+  if (!appid) return res.status(400).json({ error: 'appid required' });
+  if (artworkFallbackCache.has(appid)) return res.json(artworkFallbackCache.get(appid));
+
+  try {
+    const { data } = await axios.get('https://store.steampowered.com/api/appdetails', {
+      params: { appids: appid, filters: 'basic' },
+      timeout: 6000,
+    });
+    const entry = data?.[appid];
+    const result = entry?.success
+      ? { headerImage: entry.data.header_image || null, capsuleImage: entry.data.capsule_image || null }
+      : { headerImage: null, capsuleImage: null };
+    artworkFallbackCache.set(appid, result);
+    res.json(result);
+  } catch (err) {
+    res.json({ headerImage: null, capsuleImage: null });
+  }
+});
 
 // ─────────────────────────────────────────────
 // HOWLONGTOBEAT
@@ -887,7 +920,7 @@ if (distExists) {
 }
 
 app.listen(PORT, () => {
-  console.log(`\n🎮 Steam Dashboard Server running on http://localhost:${PORT}`);
+  console.log(`\n🎮 Steam Stats Server running on http://localhost:${PORT}`);
   const steamPaths = findSteamPaths();
   if (steamPaths.length > 0) {
     console.log(`✅ Steam installation found: ${steamPaths[0]}`);

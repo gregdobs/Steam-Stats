@@ -5,16 +5,17 @@ import { GameHeader } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
 import GenreAllocation from '../components/GenreAllocation.jsx';
 import SessionInsights from '../components/SessionInsights.jsx';
+import { ACCENT_HEX, hexToRgba, categoryColor, PageHeader } from '../components/designSystem.jsx';
 
 // ── Colour tokens ──────────────────────────────────────────────────────────
 const BUCKET_META = [
-  { key: 'Never played',   color: '#475569', min: 0,   max: 0    },
-  { key: '< 1 hour',       color: '#3b82f6', min: 0,   max: 1    },
-  { key: '1–10 hours',     color: '#6366f1', min: 1,   max: 10   },
-  { key: '10–50 hours',    color: '#8b5cf6', min: 10,  max: 50   },
-  { key: '50–200 hours',   color: '#10b981', min: 50,  max: 200  },
-  { key: '200–500 hours',  color: '#f59e0b', min: 200, max: 500  },
-  { key: '500+ hours',     color: '#f43f5e', min: 500, max: Infinity },
+  { key: 'Never played',   color: 'var(--text-muted)', min: 0,   max: 0    },
+  { key: '< 1 hour',       color: categoryColor(0), min: 0,   max: 1    },
+  { key: '1–10 hours',     color: categoryColor(1), min: 1,   max: 10   },
+  { key: '10–50 hours',    color: categoryColor(2), min: 10,  max: 50   },
+  { key: '50–200 hours',   color: categoryColor(3), min: 50,  max: 200  },
+  { key: '200–500 hours',  color: categoryColor(4), min: 200, max: 500  },
+  { key: '500+ hours',     color: 'var(--text-primary)', min: 500, max: Infinity },
 ];
 
 function getBucket(game) {
@@ -99,11 +100,11 @@ function DistributionDonut({ games, activeFilter, onFilter }) {
           {/* center hole */}
           <circle cx={CX} cy={CY} r={R_IN - 4} fill="var(--bg-card)" />
           <text x={CX} y={CY - 8} textAnchor="middle" dominantBaseline="central"
-            fill="var(--text-primary)" fontSize={22} fontWeight={700} fontFamily="Space Grotesk, sans-serif">
+            fill="var(--text-primary)" fontSize={22} fontWeight={700} fontFamily="'DM Sans', sans-serif">
             {centerCount}
           </text>
           <text x={CX} y={CY + 14} textAnchor="middle" dominantBaseline="central"
-            fill="var(--text-muted)" fontSize={10} fontFamily="Inter, sans-serif">
+            fill="var(--text-muted)" fontSize={10} fontFamily="'DM Mono', monospace">
             {centerLabel}
           </text>
         </svg>
@@ -120,7 +121,7 @@ function DistributionDonut({ games, activeFilter, onFilter }) {
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '5px 8px', borderRadius: 'var(--radius-md)', width: '100%',
                 border: isSel ? `1px solid ${b.color}` : '1px solid transparent',
-                background: isSel ? `${b.color}18` : 'transparent',
+                background: isSel ? `color-mix(in srgb, ${b.color} 15%, transparent)` : 'transparent',
                 cursor: 'pointer', textAlign: 'left',
                 opacity: activeFilter?.type === 'bucket' && !isSel ? 0.5 : 1,
                 transition: 'all 0.15s',
@@ -154,7 +155,7 @@ function TopGamesBar({ games, activeFilter, onFilter, theme }) {
         const pct = (game.playtime_forever || 0) / maxVal;
         const isSel = activeFilter?.type === 'game' && activeFilter.value === game.appid;
         const isHov = hovered === game.appid;
-        const barColor = isSel ? 'var(--accent-blue)' : `rgba(59,130,246,${Math.max(0.85 - i * 0.04, 0.35)})`;
+        const barColor = isSel ? 'var(--accent-blue)' : hexToRgba(ACCENT_HEX, Math.max(0.85 - i * 0.04, 0.35));
 
         return (
           <div key={game.appid}
@@ -267,7 +268,7 @@ function ScatterPlot({ games, activeFilter, onFilter }) {
                 transform: 'translate(-50%, -50%) scale(' + (isSel ? 1.4 : isHov ? 1.25 : 1) + ')',
                 cursor: 'pointer',
                 transition: 'opacity 0.15s, transform 0.15s, background 0.15s',
-                border: isSel ? '2px solid var(--accent-emerald)' : '1.5px solid rgba(59,130,246,0.4)',
+                border: isSel ? '2px solid var(--accent-emerald)' : `1.5px solid ${hexToRgba(ACCENT_HEX, 0.4)}`,
                 boxShadow: isSel ? '0 0 8px var(--accent-emerald)' : 'none',
                 zIndex: isSel || isHov ? 10 : 1,
               }}
@@ -302,7 +303,7 @@ function FilterPill({ filter, onClear }) {
     <div style={{
       display: 'inline-flex', alignItems: 'center', gap: 8,
       padding: '5px 12px', borderRadius: 'var(--radius-full)',
-      background: filter.color ? `${filter.color}20` : 'var(--accent-blue-dim)',
+      background: filter.color ? `color-mix(in srgb, ${filter.color} 18%, transparent)` : 'var(--accent-blue-dim)',
       border: `1px solid ${filter.color || 'var(--accent-blue)'}`,
       fontSize: 12, fontWeight: 600,
       color: filter.color || 'var(--accent-blue)',
@@ -358,17 +359,24 @@ export default function Library() {
 
   const neverPlayed = ownedGames.filter(g => !g.playtime_forever).length;
   const pctPlayed = Math.round((gamesPlayed / Math.max(ownedGames.length, 1)) * 100);
+  const neverPlayedPct = Math.round((neverPlayed / Math.max(ownedGames.length, 1)) * 100);
+  const topTwo = [...ownedGames].sort((a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0)).slice(0, 2);
+  const topTwoHours = topTwo.reduce((s, g) => s + (g.playtime_forever || 0), 0) / 60;
+  const topTwoPct = totalHoursAllTime > 0 ? Math.round((topTwoHours / totalHoursAllTime) * 100) : 0;
 
   return (
-    <div style={{ padding: '28px 24px', maxWidth: 1400, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-          Your Library
-        </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-          {ownedGames.length.toLocaleString()} games · {gamesPlayed.toLocaleString()} played · {Math.round(totalHoursAllTime).toLocaleString()}h total
-        </p>
+    <div style={{ padding: '56px 24px 96px', maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ marginBottom: 40 }}>
+        <PageHeader
+          eyebrow="Library"
+          title={<><span style={{ fontWeight: 600 }}>{ownedGames.length.toLocaleString()} games</span> owned, {gamesPlayed.toLocaleString()} ever played.</>}
+          subtitle={
+            <>
+              {neverPlayedPct >= 1 ? `${neverPlayedPct}% of the library has never been launched.` : 'Nearly everything in the library has been launched at least once.'}
+              {topTwoPct >= 15 && ` The top ${topTwo.length} games account for ${topTwoPct}% of all recorded hours.`}
+            </>
+          }
+        />
       </div>
 
       {/* Genre allocation */}

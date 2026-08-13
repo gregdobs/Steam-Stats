@@ -7,8 +7,7 @@
 //     server.js
 //     dist/            (built frontend)
 //     node_modules/     (production deps only, pruned)
-//     Start Steam Stats.vbs
-//     Start Steam Stats (debug).bat
+//     Start Steam Stats.bat
 //     README.txt
 //
 // Run with: node build-release.js
@@ -79,14 +78,13 @@ console.log('Copying dist/...');
 copyRecursive(path.join(__dirname, 'dist'), path.join(RELEASE_DIR, 'dist'));
 
 // 6. Install production-only node_modules directly into release folder
-//    Only server.js's + tray-runner.cjs's actual runtime imports belong
-//    here — NOT the full dependency list from the main package.json, which
-//    includes frontend build-time packages (react, chart.js, vite, etc.)
-//    the server never touches at runtime. Keeping this minimal keeps the
-//    release small.
+//    Only server.js's actual runtime imports belong here — NOT the full
+//    dependency list from the main package.json, which includes frontend
+//    build-time packages (react, chart.js, vite, etc.) the server never
+//    touches at runtime. Keeping this minimal keeps the release small.
 console.log('\nInstalling production dependencies into release folder...');
 const mainPkgJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-const SERVER_RUNTIME_DEPS = ['express', 'cors', 'helmet', 'axios', 'systray2'];
+const SERVER_RUNTIME_DEPS = ['express', 'cors', 'helmet', 'axios'];
 const releaseDeps = {};
 for (const dep of SERVER_RUNTIME_DEPS) {
   if (mainPkgJson.dependencies[dep]) {
@@ -105,38 +103,20 @@ const releasePkgJson = {
 fs.writeFileSync(path.join(RELEASE_DIR, 'package.json'), JSON.stringify(releasePkgJson, null, 2));
 run('npm install --omit=dev --no-audit --no-fund', { cwd: RELEASE_DIR });
 
-// 6b. Copy tray-runner.cjs — the child process that owns the tray icon,
-//     the server child, and cleanup. bootstrap.cjs prefers this if present
-//     and falls back to running server.js directly (visible console) if not.
-console.log('\nCopying tray-runner.cjs...');
-fs.copyFileSync(path.join(__dirname, 'tray-runner.cjs'), path.join(RELEASE_DIR, 'tray-runner.cjs'));
+// 7. Write the launcher — a visible-console .bat. Keeping the console
+//    window visible (rather than a hidden tray-icon launcher) is a
+//    deliberate simplification: it's the fully verified, zero-extra-
+//    dependency path, and it means startup errors are always right there
+//    on screen instead of hidden behind a tray icon that might silently
+//    fail to appear.
+console.log('\nWriting launcher script...');
 
-// 7. Write launchers.
-//    PRIMARY: a .vbs wrapper that launches Steam Stats.exe with a hidden
-//    window — this is the actual "no visible console" entry point, since
-//    pkg's compiled .exe is a console-subsystem binary that always flashes
-//    a window when double-clicked directly, and setting windowsHide on a
-//    spawned CHILD doesn't hide the PARENT's own console.
-//    FALLBACK: a visible-console troubleshooting option — if the hidden
-//    version misbehaves, this shows exactly what's happening, which
-//    matters given how much trial-and-error this bundling approach has
-//    already needed.
-console.log('\nWriting launcher scripts...');
-
-fs.writeFileSync(path.join(RELEASE_DIR, 'Start Steam Stats.vbs'), `' Steam Stats silent launcher — runs Steam Stats.exe with no visible console window.
-' Use "Start Steam Stats (debug).bat" instead if you need to see startup logs
-' or something isn't working.
-Set objShell = CreateObject("WScript.Shell")
-objShell.CurrentDirectory = CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName)
-objShell.Run """Steam Stats.exe""", 0, False
-`);
-
-fs.writeFileSync(path.join(RELEASE_DIR, 'Start Steam Stats (debug).bat'), `@echo off
-title Steam Stats (debug mode)
+fs.writeFileSync(path.join(RELEASE_DIR, 'Start Steam Stats.bat'), `@echo off
+title Steam Stats
 cd /d "%~dp0"
-echo Starting Steam Stats in debug mode...
-echo This window shows startup logs and stays open so you can see errors.
+echo Starting Steam Stats...
 echo A browser window will open automatically once the server is ready.
+echo Close this window to stop the app.
 echo.
 "Steam Stats.exe"
 pause
@@ -147,14 +127,8 @@ fs.writeFileSync(path.join(RELEASE_DIR, 'README.txt'), `Steam Stats
 ===========
 
 HOW TO RUN:
-1. Double-click "Start Steam Stats.vbs" — no window will appear, but a
-   tray icon shows up near your clock. Your browser opens automatically.
-2. Right-click the tray icon for "Open Steam Stats" or "Quit".
-
-TROUBLESHOOTING:
-If the .vbs launcher doesn't seem to do anything, or you want to see what's
-happening during startup, use "Start Steam Stats (debug).bat" instead — it
-keeps a console window open showing logs and any error messages.
+1. Double-click "Start Steam Stats.bat" — a console window opens showing
+   startup logs. Your browser opens automatically once the server is ready.
 
 FIRST-TIME SETUP:
 - You'll need a free Steam Web API key from:
@@ -163,8 +137,7 @@ FIRST-TIME SETUP:
   (Steam > Profile > Edit Profile > Privacy Settings)
 
 STOPPING THE APP:
-- Right-click the tray icon near your clock and choose "Quit"
-- Or, if using the debug .bat launcher, just close its console window
+- Close the console window.
 
 If HowLongToBeat data isn't loading, check Settings > HowLongToBeat inside
 the app for diagnostics. Local Steam data (launch counts, session insights)
@@ -180,5 +153,5 @@ this computer.
 console.log('\n✅ Release built successfully!');
 console.log(`📦 Distributable folder: ${RELEASE_DIR}`);
 console.log('\nTo distribute: zip the entire "release" folder and share it.');
-console.log('Users unzip it and double-click "Start Steam Stats.vbs" — no console window,');
-console.log('a tray icon appears near the clock with Open/Quit options.');
+console.log('Users unzip it and double-click "Start Steam Stats.bat" — a console window');
+console.log('shows startup logs and a browser tab opens automatically.');

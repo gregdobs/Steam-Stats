@@ -103,6 +103,17 @@ export async function checkServerHealth() {
   }
 }
 
+// Last-resort artwork lookup for games whose flat-path CDN images 404
+// (some newer titles only have art under Steam's newer hashed asset path).
+export async function fetchArtworkFallback(appId) {
+  try {
+    const res = await fetch(`${BASE}/steam/artwork-fallback?appid=${appId}`);
+    return await res.json();
+  } catch {
+    return { headerImage: null, capsuleImage: null };
+  }
+}
+
 // Game art URLs — Steam CDN has multiple formats; not all games have all assets
 export function getGameHeaderUrl(appId) {
   return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;

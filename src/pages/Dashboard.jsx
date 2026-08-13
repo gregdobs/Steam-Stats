@@ -8,8 +8,7 @@ import {
 import { GameCapsule } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
 import TonightPick from '../components/TonightPick.jsx';
-
-const ACCENT_HEX = '#b4623c';
+import { ACCENT_HEX, hexToRgba, tint, SectionHeading, StatCell } from '../components/designSystem.jsx';
 
 const PERIOD_META = {
   '7days':   { days: 7,    phrase: 'in the last 7 days',      shortLabel: '7 days',   shareLabel: 'the last 7 days' },
@@ -23,36 +22,12 @@ function getPeriodMinutes(game, timePeriod) {
   return timePeriod === 'alltime' ? (game.playtime_forever || 0) : (game.playtime_2weeks || 0);
 }
 
-function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-// Alpha-graded steps of the accent color — brightest for the biggest slice,
-// fading out toward the smallest, mirroring the design's ribbon treatment.
-function tint(i, n) {
-  const alpha = 1 - (i / Math.max(n - 1, 1)) * 0.78;
-  return hexToRgba(ACCENT_HEX, alpha.toFixed(3));
-}
-
 function lowerFirst(s) {
   return s.charAt(0).toLowerCase() + s.slice(1);
 }
 
 function formatDayLabel(timestamp) {
   return new Date(timestamp).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }).toUpperCase();
-}
-
-function SectionHeading({ title, trailing }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 20 }}>
-      <h2 style={{ margin: 0, fontSize: 13, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-        {title}
-      </h2>
-      <span style={{ height: 1, flex: 1, background: 'var(--border-subtle)' }} />
-      {trailing && <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{trailing}</span>}
-    </div>
-  );
 }
 
 // Day-by-day bar strip — used both for the hero's whole-library window and
@@ -133,22 +108,6 @@ function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId }) {
       </div>
       {series.length > 0 && <BarStrip series={series} highlightRecent />}
     </section>
-  );
-}
-
-function StatCell({ label, value, first, last }) {
-  return (
-    <div style={{
-      padding: `16px ${last ? 0 : 18}px 16px ${first ? 0 : 18}px`,
-      borderLeft: first ? 'none' : '1px solid var(--border-default)',
-    }}>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 9 }}>
-        {label}
-      </div>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 27, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1 }}>
-        {value}
-      </div>
-    </div>
   );
 }
 

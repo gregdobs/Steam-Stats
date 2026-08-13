@@ -11,7 +11,7 @@
 // re-launching the packaged .exe itself instead of running server.js —
 // process.execPath inside a pkg binary IS the .exe, and pkg's documented
 // PKG_EXECPATH='' override did not prevent the recursion in practice
-// (confirmed via testing: infinite "SteamStats starting..." loop).
+// (confirmed via testing: infinite "Steam Stats starting..." loop).
 //
 // Attempt 3 (this one): spawn a REAL, separate node.exe binary that ships
 // alongside the release folder (build-release.js downloads it from
@@ -91,7 +91,7 @@ function openBrowser() {
 }
 
 function main() {
-  console.log('🎮 SteamStats starting…\n');
+  console.log('🎮 Steam Stats starting…\n');
   console.log(`Working directory: ${appDir}`);
 
   if (!fs.existsSync(serverPath)) {
@@ -111,47 +111,26 @@ function main() {
     return fail(`Cannot find node.exe next to the executable (looked in ${appDir})`);
   }
 
-  // Prefer tray-runner.cjs — it manages a system tray icon (Open/Quit) and
-  // guarantees the server child is cleaned up on every exit path, so users
-  // aren't left with an orphaned node.exe holding port 3001. If it's
-  // missing (e.g. an older/partial release folder), fall back to the
-  // previous behavior of running server.js directly with a visible console
-  // — this fallback path is the one that was already fully verified to
-  // work, so a missing tray-runner.cjs never breaks the app, it only loses
-  // the hidden-console convenience.
-  const trayRunnerPath = path.join(appDir, 'tray-runner.cjs');
-  const useTrayRunner = fs.existsSync(trayRunnerPath);
-  const targetScript = useTrayRunner ? trayRunnerPath : serverPath;
-
-  if (!useTrayRunner) {
-    console.log('ℹ️  tray-runner.cjs not found — running server directly (console will stay visible).');
-  }
-
-  const child = spawn(nodeExe, [targetScript], {
+  const child = spawn(nodeExe, [serverPath], {
     cwd: appDir,
     stdio: 'inherit',
     windowsHide: false,
   });
 
   child.on('error', (err) => {
-    fail(`Failed to start ${useTrayRunner ? 'tray runner' : 'server'} process: ${err.message}`);
+    fail(`Failed to start server process: ${err.message}`);
   });
 
   child.on('exit', (code) => {
     if (code !== 0 && code !== null) {
-      waitForExit(`${useTrayRunner ? 'Tray runner' : 'Server'} exited with code ${code}.`);
+      waitForExit(`Server exited with code ${code}.`);
     }
   });
 
-  // tray-runner.cjs handles its own browser-opening once its server child is
-  // ready, so only do it here when falling back to spawning server.js
-  // directly (no tray runner to do it for us).
-  if (!useTrayRunner) {
-    waitForServerReady(() => {
-      console.log('\n✅ Server ready — opening browser...');
-      openBrowser();
-    });
-  }
+  waitForServerReady(() => {
+    console.log('\n✅ Server ready — opening browser...');
+    openBrowser();
+  });
 
   process.on('SIGINT', () => { child.kill(); process.exit(0); });
 }

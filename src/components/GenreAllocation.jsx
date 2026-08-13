@@ -1,23 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
 import { fetchGenres, loadSnapshots, formatHours } from '../utils/steam.js';
+import { categoryColor } from './designSystem.jsx';
 
-const GENRE_COLORS = {
-  'Action':        '#f43f5e',
-  'Adventure':     '#f59e0b',
-  'RPG':           '#8b5cf6',
-  'Strategy':      '#3b82f6',
-  'Simulation':    '#10b981',
-  'Sports':        '#06b6d4',
-  'Racing':        '#fb923c',
-  'Indie':         '#84cc16',
-  'Casual':        '#e879f9',
-  'Massively Multiplayer': '#6366f1',
-  'Free to Play':  '#94a3b8',
-  'Early Access':  '#eab308',
-};
-const FALLBACK_COLOR = '#64748b';
-const getColor = (genre) => GENRE_COLORS[genre] || FALLBACK_COLOR;
+// Stable per-genre color: hashed by name (not by sort rank, which shifts as
+// hour totals change) into the shared 5-color warm palette.
+function getColor(genre) {
+  let hash = 0;
+  for (let i = 0; i < genre.length; i++) hash = (hash * 31 + genre.charCodeAt(i)) | 0;
+  return categoryColor(Math.abs(hash));
+}
 
 export default function GenreAllocation() {
   const { ownedGames, steamId } = useApp();

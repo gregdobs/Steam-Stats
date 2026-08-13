@@ -3,31 +3,11 @@ import { useApp } from '../hooks/useAppContext.jsx';
 import { formatHours, getCompletionStatus, minutesToHours } from '../utils/steam.js';
 import { GameHeader } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
-
-function ProgressRing({ pct, size = 44, color }) {
-  const r = (size - 6) / 2;
-  const circumference = 2 * Math.PI * r;
-  const clamped = Math.min(pct, 100);
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth={4} />
-      <circle
-        cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={4}
-        strokeDasharray={`${circumference * (clamped / 100)} ${circumference}`}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        style={{ transition: 'stroke-dasharray 0.6s ease' }}
-      />
-      <text x="50%" y="50%" textAnchor="middle" dominantBaseline="central" fill="white" fontSize={size * 0.24} fontWeight={700} fontFamily="Space Grotesk, sans-serif">
-        {pct > 200 ? '200+' : pct}
-      </text>
-    </svg>
-  );
-}
+import { ProgressRing, PageHeader } from '../components/designSystem.jsx';
 
 const STATUS_HEX = {
-  'Barely Started': '#f43f5e', 'In Progress': '#3b82f6', 'Getting There': '#f59e0b',
-  'Completed': '#10b981', 'Overplayer': '#8b5cf6',
+  'Barely Started': 'var(--accent-rose)', 'In Progress': 'var(--accent-blue)', 'Getting There': 'var(--accent-amber)',
+  'Completed': 'var(--accent-emerald)', 'Overplayer': 'var(--accent-violet)',
 };
 
 function HLTBCard({ game, hltbData, loading, onClick, isSelected, spotlight }) {
@@ -50,7 +30,7 @@ function HLTBCard({ game, hltbData, loading, onClick, isSelected, spotlight }) {
           <GameHeader appId={game.appid} name={game.name} />
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 55%, transparent 100%)' }} />
           <div style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(0,0,0,0.55)', borderRadius: '50%', padding: 2 }}>
-            <ProgressRing pct={pct ?? 0} size={48} color={STATUS_HEX[status.label] || '#3b82f6'} />
+            <ProgressRing pct={pct ?? 0} size={48} color={STATUS_HEX[status.label] || 'var(--accent-blue)'} />
           </div>
           <div style={{ position: 'absolute', bottom: 10, left: 12, right: 12 }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{game.name}</div>
@@ -203,14 +183,23 @@ export default function Completion() {
   const restGames = displayGames.filter(g => !spotlightIds.has(g.appid));
 
   return (
-    <div style={{ padding: '28px 24px', maxWidth: 1400, margin: '0 auto' }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Completion Tracker</h1>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-          Your playtime vs. HowLongToBeat estimates · {loadedCount}/{playedGames.length} loaded
-          {allEligibleGames.length > playedGames.length && ` of ${allEligibleGames.length} eligible`}
-          {' '}· Click a game for details
-        </p>
+    <div style={{ padding: '56px 24px 96px', maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ marginBottom: 40 }}>
+        <PageHeader
+          eyebrow="Completion"
+          title={
+            gamesWithData.length > 0
+              ? <>Your hours against <span style={{ fontWeight: 600 }}>HowLongToBeat</span> — {completedCount} of {gamesWithData.length} matched games sit at or past the main story.</>
+              : <>Your hours against <span style={{ fontWeight: 600 }}>HowLongToBeat</span> estimates.</>
+          }
+          subtitle={
+            <>
+              {loadedCount}/{playedGames.length} loaded
+              {allEligibleGames.length > playedGames.length && ` of ${allEligibleGames.length} eligible`}
+              {' '}· Click a game for details
+            </>
+          }
+        />
         {loadedCount < playedGames.length && (
           <div style={{ marginTop: 8 }}>
             <div className="progress-bar" style={{ height: 3, maxWidth: 240 }}>
