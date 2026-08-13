@@ -1,19 +1,18 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
-import { fetchGenres, recommendTonight, formatHours } from '../utils/steam.js';
+import { fetchGenres, recommendTonight } from '../utils/steam.js';
 import { GameHeader } from './GameImage.jsx';
 
-const TIME_BUDGETS = [
-  { label: 'Any length', value: null },
-  { label: '< 5h', value: 5 },
-  { label: '< 10h', value: 10 },
-  { label: '< 20h', value: 20 },
+const BUDGETS = [
+  { label: 'any', value: null },
+  { label: '<5h', value: 5 },
+  { label: '<10h', value: 10 },
+  { label: '<20h', value: 20 },
 ];
 
 export default function TonightPick() {
   const { ownedGames, hltbCache } = useApp();
   const [maxHours, setMaxHours] = useState(null);
-  const [genre, setGenre] = useState(null);
   const [genreData, setGenreData] = useState({});
   const pollRef = useRef(null);
 
@@ -22,14 +21,20 @@ export default function TonightPick() {
     [ownedGames]
   );
 
-  // Fetches nothing itself beyond genre tags (needed for the genre filter
-  // dropdown) — HLTB data is read from the already-shared cache, populated
-  // by Backlog/Completion page visits, not fetched fresh here. Deliberately
-  // an instant filter over existing data, not another loading state.
+  const results = useMemo(
+    () => recommendTonight(unplayedGames, hltbCache, {}, { maxHours }),
+    [unplayedGames, hltbCache, maxHours]
+  );
+
+  const shown = results.slice(0, 6);
+  const shownIds = shown.map(g => g.appid).join(',');
+
+  // Genre tags here are purely cosmetic (a badge on the featured pick), so
+  // only fetch for what's actually on screen rather than the whole backlog.
   useEffect(() => {
-    if (unplayedGames.length === 0) return;
+    if (shown.length === 0) return;
     let cancelled = false;
-    const appIds = unplayedGames.map(g => g.appid);
+    const appIds = shown.map(g => g.appid);
 
     const load = async () => {
       const result = await fetchGenres(appIds);
@@ -46,95 +51,105 @@ export default function TonightPick() {
     };
     load();
     return () => { cancelled = true; if (pollRef.current) clearInterval(pollRef.current); };
-  }, [unplayedGames.length]);
-
-  const availableGenres = useMemo(() => {
-    const set = new Set();
-    for (const g of unplayedGames) {
-      const entry = genreData[g.appid];
-      if (entry?.genres) entry.genres.forEach(x => set.add(x));
-    }
-    return [...set].sort();
-  }, [unplayedGames, genreData]);
-
-  const results = useMemo(
-    () => recommendTonight(unplayedGames, hltbCache, genreData, { maxHours, genre }),
-    [unplayedGames, hltbCache, genreData, maxHours, genre]
-  );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownIds]);
 
   if (unplayedGames.length === 0) return null;
 
+  const pick = shown[0];
+  const alternates = shown.slice(1, 6);
+  const pickGenres = pick ? genreData[pick.appid]?.genres : null;
+  const knownCount = results.filter(g => g.estimateHours != null).length;
+
   return (
-    <div className="card" style={{ padding: 24, marginBottom: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
-        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-          🎲 What Should I Play Tonight
-        </h3>
-      </div>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-        Picks from your backlog using cached HowLongToBeat estimates — shortest known games first.
-      </p>
-
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
-        <div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 6 }}>Time tonight</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {TIME_BUDGETS.map(b => (
-              <button key={b.label} onClick={() => setMaxHours(b.value)} className="btn btn-ghost" style={{
-                fontSize: 12, padding: '5px 12px',
-                background: maxHours === b.value ? 'var(--accent-blue-dim)' : undefined,
-                color: maxHours === b.value ? 'var(--accent-blue)' : undefined,
-                borderColor: maxHours === b.value ? 'var(--accent-blue)' : undefined,
-              }}>{b.label}</button>
-            ))}
-          </div>
+    <section>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
+        <h2 style={{ margin: 0, fontSize: 13, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+          Tonight
+        </h2>
+        <span style={{ height: 1, flex: 1, background: 'var(--border-subtle)' }} />
+        <div style={{ display: 'flex', gap: 6 }}>
+          {BUDGETS.map(b => {
+            const active = maxHours === b.value;
+            return (
+              <button
+                key={b.label}
+                onClick={() => setMaxHours(b.value)}
+                style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 11.5, padding: '5px 11px',
+                  borderRadius: 'var(--radius-full)', cursor: 'pointer',
+                  border: `1px solid ${active ? 'var(--accent-blue)' : 'var(--border-default)'}`,
+                  background: active ? 'var(--accent-blue)' : 'transparent',
+                  color: active ? '#fffdfa' : 'var(--text-secondary)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {b.label}
+              </button>
+            );
+          })}
         </div>
-
-        {availableGenres.length > 0 && (
-          <div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 6 }}>Genre</div>
-            <select
-              className="input"
-              value={genre || ''}
-              onChange={e => setGenre(e.target.value || null)}
-              style={{ fontSize: 12, padding: '5px 10px', width: 'auto' }}
-            >
-              <option value="">Any genre</option>
-              {availableGenres.map(g => <option key={g} value={g}>{g}</option>)}
-            </select>
-          </div>
-        )}
       </div>
 
-      {/* Results */}
-      {results.length === 0 ? (
+      {shown.length === 0 ? (
         <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
           {maxHours != null
-            ? "Nothing in your backlog is confirmed to fit that budget yet — HLTB estimates fill in as you browse Backlog/Completion."
+            ? 'Nothing in your backlog is confirmed to fit that budget yet — HLTB estimates fill in as you browse Backlog/Completion.'
             : 'No games match this filter.'}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
-          {results.slice(0, 8).map(game => (
-            <div key={game.appid} className="card" style={{ overflow: 'hidden' }}>
-              <div style={{ height: 70, background: 'var(--bg-tertiary)', overflow: 'hidden' }}>
-                <GameHeader appId={game.appid} name={game.name} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 20, alignItems: 'start' }}>
+          <article className="card" style={{ borderRadius: 26, overflow: 'hidden' }}>
+            <div style={{ height: 150, background: 'var(--bg-tertiary)', overflow: 'hidden' }}>
+              <GameHeader appId={pick.appid} name={pick.name} />
+            </div>
+            <div style={{ padding: '22px 24px 24px' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '1.1px', textTransform: 'uppercase', color: 'var(--accent-blue)', marginBottom: 9 }}>
+                Shortest unplayed pick
               </div>
-              <div style={{ padding: '9px 11px' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 4 }}>
-                  {game.name}
+              <h3 style={{ margin: '0 0 8px', fontSize: 21, fontWeight: 600, letterSpacing: '-0.3px' }}>
+                {pick.name}
+              </h3>
+              {pickGenres?.length > 0 && (
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 14 }}>
+                  {pickGenres.slice(0, 3).map(g => (
+                    <span key={g} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-full)', background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                      {g}
+                    </span>
+                  ))}
                 </div>
-                {game.estimateHours != null ? (
-                  <div style={{ fontSize: 11, color: 'var(--accent-emerald)' }}>~{game.estimateHours}h main story</div>
-                ) : (
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Length unknown</div>
+              )}
+              <div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, color: 'var(--text-primary)' }}>
+                  {pick.estimateHours != null ? `~${pick.estimateHours}h` : 'Length unknown'}
+                </div>
+                {pick.estimateHours != null && (
+                  <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>main story</div>
                 )}
               </div>
             </div>
-          ))}
+          </article>
+
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {alternates.map(g => (
+              <div key={g.appid} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 14px', borderRadius: 16 }}>
+                <div style={{ width: 74, height: 35, flexShrink: 0, borderRadius: 8, overflow: 'hidden', background: 'var(--bg-tertiary)' }}>
+                  <GameHeader appId={g.appid} name={g.name} />
+                </div>
+                <span style={{ flex: 1, fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {g.name}
+                </span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--text-muted)', flexShrink: 0 }}>
+                  {g.estimateHours != null ? `~${g.estimateHours}h` : 'unknown'}
+                </span>
+              </div>
+            ))}
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)', padding: 14 }}>
+              {knownCount} of {unplayedGames.length} unplayed games have a known length.
+            </div>
+          </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }

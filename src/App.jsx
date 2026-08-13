@@ -19,14 +19,15 @@ function LoadingOverlay() {
     }}>
       <div style={{
         width: 56, height: 56, borderRadius: '50%',
-        background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+        background: 'var(--accent-blue-dim)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 24, boxShadow: '0 8px 32px rgba(59,130,246,0.35)',
         animation: 'pulse 1.5s ease-in-out infinite',
-      }}>🎮</div>
+      }}>
+        <svg width="26" height="26" viewBox="0 0 20 20" fill="none" stroke="var(--accent-blue)" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="10" r="7.2"></circle><path d="M10 5.4V10l3 2"></path></svg>
+      </div>
       <div style={{ textAlign: 'center' }}>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
-          Steam <span style={{ color: 'var(--accent-blue)' }}>Stats</span>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
+          Steam Stats
         </h2>
         <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>{loadingPhase || 'Loading...'}</p>
       </div>

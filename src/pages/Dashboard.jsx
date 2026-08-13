@@ -1,223 +1,342 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
-import { getGameHeaderUrl, formatHours, formatLastPlayed, minutesToHours } from '../utils/steam.js';
-import { GameCapsule, GameHero } from '../components/GameImage.jsx';
-import StatCard from '../components/StatCard.jsx';
-import PlaytimeDonut from '../components/PlaytimeDonut.jsx';
+import {
+  formatHours, minutesToHours, formatLastPlayed, loadSnapshots,
+  computePlayStreak, computeWindowPercentile,
+  getDailyPlaytimeSeries, getDailyPlaytimeSeriesForGame,
+} from '../utils/steam.js';
+import { GameCapsule } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
-import StreakAndPercentile from '../components/StreakAndPercentile.jsx';
 import TonightPick from '../components/TonightPick.jsx';
 
-function HeroGameCard({ game }) {
-  const hours = minutesToHours(game.playtime_2weeks || game.playtime_forever || 0);
-  const allTimeHours = minutesToHours(game.playtime_forever || 0);
+const ACCENT_HEX = '#b4623c';
+
+const PERIOD_META = {
+  '7days':   { days: 7,    phrase: 'in the last 7 days',      shortLabel: '7 days',   shareLabel: 'the last 7 days' },
+  '2weeks':  { days: 14,   phrase: 'over the last two weeks', shortLabel: '2 weeks',  shareLabel: 'the last two weeks' },
+  '30days':  { days: 30,   phrase: 'over the last 30 days',   shortLabel: '30 days',  shareLabel: 'the last 30 days' },
+  'alltime': { days: null, phrase: 'across your library',     shortLabel: 'All time', shareLabel: null },
+};
+const PERIOD_EYEBROW = { '7days': 'Last 7 days', '2weeks': 'Last 14 days', '30days': 'Last 30 days', 'alltime': 'All time' };
+
+function getPeriodMinutes(game, timePeriod) {
+  return timePeriod === 'alltime' ? (game.playtime_forever || 0) : (game.playtime_2weeks || 0);
+}
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Alpha-graded steps of the accent color — brightest for the biggest slice,
+// fading out toward the smallest, mirroring the design's ribbon treatment.
+function tint(i, n) {
+  const alpha = 1 - (i / Math.max(n - 1, 1)) * 0.78;
+  return hexToRgba(ACCENT_HEX, alpha.toFixed(3));
+}
+
+function lowerFirst(s) {
+  return s.charAt(0).toLowerCase() + s.slice(1);
+}
+
+function formatDayLabel(timestamp) {
+  return new Date(timestamp).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }).toUpperCase();
+}
+
+function SectionHeading({ title, trailing }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 20 }}>
+      <h2 style={{ margin: 0, fontSize: 13, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        {title}
+      </h2>
+      <span style={{ height: 1, flex: 1, background: 'var(--border-subtle)' }} />
+      {trailing && <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{trailing}</span>}
+    </div>
+  );
+}
+
+// Day-by-day bar strip — used both for the hero's whole-library window and
+// (smaller, single-tone) for a single game's sparkline in the Focus card.
+function BarStrip({ series, height = 96, highlightRecent = false, leftLabel, rightLabel }) {
+  if (!series.length) return null;
+  const max = Math.max(...series.map(d => d.minutes), 1);
+  const highlightFrom = series.length - 4;
 
   return (
-    <div style={{
-      position: 'relative',
-      borderRadius: 'var(--radius-xl)',
-      overflow: 'hidden',
-      minHeight: 380,
-      border: '1px solid var(--border-subtle)',
-      boxShadow: 'var(--shadow-xl)',
-      background: 'var(--bg-tertiary)',
-    }}>
-      {/* Hero background */}
-      <div style={{ position: 'absolute', inset: 0 }}>
-        <GameHero appId={game.appid} name={game.name} style={{ objectPosition: 'center top' }} />
+    <div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height }}>
+        {series.map((d, i) => {
+          const barHeight = d.minutes === 0 ? 3 : Math.max(6, Math.round((d.minutes / max) * height));
+          const fill = d.minutes === 0
+            ? 'var(--border-default)'
+            : (highlightRecent && i >= highlightFrom) ? 'var(--accent-blue)' : hexToRgba(ACCENT_HEX, 0.45);
+          return (
+            <div key={d.date} title={d.minutes === 0 ? 'No play' : formatHours(d.minutes)} style={{
+              flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%',
+            }}>
+              <div style={{ width: '100%', borderRadius: 6, background: fill, height: barHeight }} />
+            </div>
+          );
+        })}
       </div>
-
-      {/* Gradient overlay */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: 'linear-gradient(to right, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.75) 50%, rgba(0,0,0,0.3) 100%)',
-      }} />
-
-      {/* Content */}
-      <div style={{
-        position: 'relative', zIndex: 2,
-        display: 'flex', alignItems: 'flex-end', gap: 28,
-        padding: 36, minHeight: 380,
-      }}>
-        {/* Capsule art */}
-        <div style={{
-          flexShrink: 0, width: 140,
-          borderRadius: 'var(--radius-lg)',
-          overflow: 'hidden',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-          border: '2px solid rgba(255,255,255,0.15)',
-          background: 'rgba(255,255,255,0.05)',
-          aspectRatio: '2/3',
-        }}>
-          <GameCapsule appId={game.appid} name={game.name} />
-        </div>
-
-        {/* Info */}
-        <div style={{ flex: 1 }}>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '4px 10px', borderRadius: 'var(--radius-full)',
-            background: 'rgba(59, 130, 246, 0.25)',
-            border: '1px solid rgba(59, 130, 246, 0.4)',
-            color: '#93c5fd',
-            fontSize: 11, fontWeight: 600, letterSpacing: '0.5px',
-            textTransform: 'uppercase', marginBottom: 12
-          }}>
-            🔥 Most Played This Period
-          </div>
-
-          <h2 style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(24px, 3vw, 38px)',
-            fontWeight: 700,
-            color: '#ffffff',
-            letterSpacing: '-0.5px',
-            lineHeight: 1.15,
-            marginBottom: 20,
-            textShadow: '0 2px 12px rgba(0,0,0,0.5)',
-          }}>
-            {game.name}
-          </h2>
-
-          {/* Stats row */}
-          <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', marginBottom: 20 }}>
-            <div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 2 }}>
-                This Period
-              </div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, color: '#fff', lineHeight: 1 }}>
-                {formatHours(game.playtime_2weeks || game.playtime_forever)}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 2 }}>
-                All Time
-              </div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, color: 'rgba(255,255,255,0.7)', lineHeight: 1 }}>
-                {formatHours(game.playtime_forever)}
-              </div>
-            </div>
-            {game.launchCount && (
-              <div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 2 }}>
-                  Launches
-                </div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, color: 'rgba(255,255,255,0.7)', lineHeight: 1 }}>
-                  {game.launchCount}×
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Last played */}
-          {(game.localLastPlayed || game.rtime_last_played) && (
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>
-              Last played {formatLastPlayed(game.localLastPlayed || game.rtime_last_played)}
-            </div>
-          )}
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--text-muted)', letterSpacing: '0.6px' }}>
+        <span>{leftLabel ?? formatDayLabel(series[0].timestamp)}</span>
+        <span>{rightLabel ?? 'TODAY'}</span>
       </div>
     </div>
   );
 }
 
-function GameCard({ game, rank, style = {}, onClick, isSelected }) {
-  const hoursThisPeriod = game.playtime_2weeks || 0;
-  const hoursTotal = game.playtime_forever || 0;
-  const pct = hoursTotal > 0 ? Math.round((hoursThisPeriod / hoursTotal) * 100) : 0;
+function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId }) {
+  const meta = PERIOD_META[timePeriod];
+  const streak = steamId ? computePlayStreak(steamId) : null;
+  const windowPct = (steamId && meta.days) ? computeWindowPercentile(steamId, meta.days) : null;
+  const series = (steamId && meta.days) ? getDailyPlaytimeSeries(steamId, meta.days) : [];
+
+  const hours = minutesToHours(totalPeriodMinutes);
+  const hoursLabel = hours >= 10 ? Math.round(hours).toLocaleString() : hours.toFixed(1);
+  const gameCount = periodGames.length;
+  const topGame = periodGames[0];
+  const topShare = topGame && totalPeriodMinutes > 0
+    ? Math.round((getPeriodMinutes(topGame, timePeriod) / totalPeriodMinutes) * 100)
+    : 0;
+  const hasSubtext = windowPct?.percentile != null || (streak && streak.currentStreak > 0);
 
   return (
-    <div className="card" style={{
-      display: 'flex', gap: 0, overflow: 'hidden',
-      transition: 'all 0.2s ease', cursor: 'pointer',
-      border: isSelected ? '1px solid var(--accent-blue)' : undefined,
-      background: isSelected ? 'var(--accent-blue-dim)' : undefined,
-      ...style,
-    }}
-      onClick={(e) => onClick?.(game, e)}
-      onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; } }}
-      onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; } }}
-    >
-      {/* Capsule */}
-      <div style={{ width: 90, flexShrink: 0, background: 'var(--bg-tertiary)', overflow: 'hidden', position: 'relative', minHeight: 120 }}>
-        {rank && (
-          <div style={{
-            position: 'absolute', top: 6, left: 6, zIndex: 2,
-            width: 22, height: 22, borderRadius: '50%',
-            background: 'rgba(0,0,0,0.7)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 11, fontWeight: 700, color: '#fff',
-          }}>{rank}</div>
+    <section style={{
+      display: 'grid',
+      gridTemplateColumns: series.length ? 'minmax(0,1.45fr) minmax(0,1fr)' : '1fr',
+      gap: 56, alignItems: 'end',
+    }}>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+            {PERIOD_EYEBROW[timePeriod]}
+          </span>
+          <span style={{ height: 1, flex: 1, background: 'var(--border-default)' }} />
+        </div>
+        <h1 style={{ margin: 0, fontSize: 'clamp(26px, 3.2vw, 40px)', lineHeight: 1.22, fontWeight: 400, letterSpacing: '-0.9px', color: 'var(--text-primary)' }}>
+          <span style={{ fontWeight: 600 }}>{hoursLabel} hours</span>
+          {` across ${gameCount} game${gameCount === 1 ? '' : 's'} ${meta.phrase}`}
+          {windowPct?.percentile >= 75 && ' — a heavier stretch than usual'}
+          {windowPct?.percentile != null && windowPct.percentile <= 10 && ' — a quieter stretch than usual'}
+          {gameCount > 1 && topShare >= 40 && ', and mostly one game'}
+          {'.'}
+        </h1>
+        {hasSubtext && (
+          <p style={{ margin: '20px 0 0', fontSize: 15, lineHeight: 1.65, color: 'var(--text-secondary)', maxWidth: '52ch' }}>
+            {windowPct?.percentile >= 75 && <>That puts this stretch in the <span style={{ color: 'var(--accent-blue)' }}>{lowerFirst(windowPct.label)}</span>. </>}
+            {windowPct?.percentile != null && windowPct.percentile <= 10 && <>{windowPct.label}. </>}
+            {streak && streak.currentStreak > 0 && `${streak.currentStreak} day${streak.currentStreak === 1 ? '' : 's'} running, with today still open.`}
+          </p>
         )}
+      </div>
+      {series.length > 0 && <BarStrip series={series} highlightRecent />}
+    </section>
+  );
+}
+
+function StatCell({ label, value, first, last }) {
+  return (
+    <div style={{
+      padding: `16px ${last ? 0 : 18}px 16px ${first ? 0 : 18}px`,
+      borderLeft: first ? 'none' : '1px solid var(--border-default)',
+    }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 9 }}>
+        {label}
+      </div>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 27, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1 }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function FocusCard({ game, timePeriod, periodMinutes, totalPeriodMinutes, steamId, onClick }) {
+  const meta = PERIOD_META[timePeriod];
+  const allTimeMinutes = game.playtime_forever || 0;
+  const avgSessionHours = game.launchCount && allTimeMinutes ? (allTimeMinutes / 60 / game.launchCount) : null;
+  const sharePct = totalPeriodMinutes > 0 ? Math.round((periodMinutes / totalPeriodMinutes) * 100) : 0;
+  const sparkline = (steamId && meta.days) ? getDailyPlaytimeSeriesForGame(steamId, game.appid, meta.days) : [];
+  const hasSparkline = sparkline.some(d => d.minutes > 0);
+  const peakHours = hasSparkline ? minutesToHours(Math.max(...sparkline.map(d => d.minutes))) : 0;
+  const lastPlayed = game.localLastPlayed || game.rtime_last_played;
+  const columns = (timePeriod === 'alltime' ? 1 : 2) + (avgSessionHours != null ? 1 : 0);
+
+  return (
+    <article className="card" onClick={onClick} style={{ padding: 26, display: 'flex', gap: 26, cursor: 'pointer' }}>
+      <div style={{ width: 132, height: 198, flexShrink: 0, alignSelf: 'flex-start', borderRadius: 18, overflow: 'hidden', background: 'var(--bg-tertiary)' }}>
         <GameCapsule appId={game.appid} name={game.name} />
       </div>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div>
+          <h3 style={{ margin: '0 0 6px', fontSize: 25, fontWeight: 600, letterSpacing: '-0.5px', lineHeight: 1.2 }}>
+            {game.name}
+          </h3>
+          <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-secondary)' }}>
+            {lastPlayed && `Played ${formatLastPlayed(lastPlayed)}`}
+            {game.launchCount ? `${lastPlayed ? ' · ' : ''}${game.launchCount} session${game.launchCount === 1 ? '' : 's'} all time` : ''}
+          </p>
+        </div>
 
-      {/* Content */}
-      <div style={{ padding: '14px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
         <div style={{
-          fontSize: 14, fontWeight: 600, color: 'var(--text-primary)',
-          fontFamily: 'var(--font-display)',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          display: 'grid', gridTemplateColumns: `repeat(${columns},minmax(0,1fr))`,
+          borderTop: '1px solid var(--border-default)', borderBottom: '1px solid var(--border-default)',
         }}>
-          {game.name}
+          {timePeriod !== 'alltime' && <StatCell label={meta.shortLabel} value={formatHours(periodMinutes)} first />}
+          <StatCell label="All time" value={formatHours(allTimeMinutes)} first={timePeriod === 'alltime'} />
+          {avgSessionHours != null && <StatCell label="Session" value={`${avgSessionHours.toFixed(1)}h`} last />}
         </div>
 
-        <div style={{ display: 'flex', gap: 16, alignItems: 'baseline' }}>
+        {meta.shareLabel && (
           <div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Period</div>
-            <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--accent-blue)' }}>
-              {formatHours(hoursThisPeriod)}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+              <span>Share of {meta.shareLabel}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-blue)' }}>{sharePct}%</span>
             </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>All Time</div>
-            <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-secondary)' }}>
-              {formatHours(hoursTotal)}
-            </div>
-          </div>
-          {game.launchCount && (
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Launches</div>
-              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-secondary)' }}>
-                {game.launchCount}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Progress bar showing period vs all time */}
-        {hoursThisPeriod > 0 && hoursTotal > 0 && (
-          <div>
-            <div className="progress-bar">
-              <div
-                className="progress-fill"
-                style={{ width: `${Math.min(pct, 100)}%`, background: 'var(--accent-blue)' }}
-              />
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
-              {pct}% of total hours this period
+            <div className="progress-bar" style={{ height: 7 }}>
+              <div className="progress-fill" style={{ width: `${Math.min(sharePct, 100)}%`, background: 'var(--accent-blue)' }} />
             </div>
           </div>
         )}
 
-        {game.userTags && game.userTags.length > 0 && (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {game.userTags.slice(0, 3).map(tag => (
-              <span key={tag} style={{
-                fontSize: 10, padding: '2px 7px', borderRadius: 'var(--radius-full)',
-                background: 'var(--bg-tertiary)', color: 'var(--text-muted)',
-                border: '1px solid var(--border-subtle)',
-              }}>{tag}</span>
-            ))}
+        {hasSparkline && (
+          <div style={{ marginTop: 'auto' }}>
+            <BarStrip series={sparkline} height={44} leftLabel="THIS GAME, DAY BY DAY" rightLabel={`PEAK ${peakHours}H`} />
           </div>
         )}
       </div>
+    </article>
+  );
+}
+
+function ActiveRow({ game, timePeriod, onClick }) {
+  const periodMinutes = getPeriodMinutes(game, timePeriod);
+  const allTimeMinutes = game.playtime_forever || 0;
+  const lastPlayed = game.localLastPlayed || game.rtime_last_played;
+
+  return (
+    <article
+      className="card" onClick={onClick}
+      style={{ padding: 14, display: 'flex', gap: 14, alignItems: 'center', flex: 1, cursor: 'pointer' }}
+    >
+      <div style={{ width: 46, height: 69, flexShrink: 0, borderRadius: 12, overflow: 'hidden', background: 'var(--bg-tertiary)' }}>
+        <GameCapsule appId={game.appid} name={game.name} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {game.name}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+          {lastPlayed ? `Played ${formatLastPlayed(lastPlayed)}` : 'Recently active'}
+          {allTimeMinutes > 0 ? ` · ${formatHours(allTimeMinutes)} all time` : ''}
+        </div>
+      </div>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 17, color: 'var(--text-primary)', flexShrink: 0 }}>
+        {formatHours(periodMinutes)}
+      </div>
+    </article>
+  );
+}
+
+function TimeBreakdown({ periodGames, timePeriod, totalPeriodMinutes }) {
+  if (periodGames.length < 2) return null;
+
+  const MAX = 9;
+  const top = periodGames.slice(0, MAX);
+  const rest = periodGames.slice(MAX);
+  const restTotal = rest.reduce((s, g) => s + getPeriodMinutes(g, timePeriod), 0);
+  const sliceCount = top.length + (restTotal > 0 ? 1 : 0);
+
+  const slices = top.map((g, i) => ({
+    id: g.appid, name: g.name, minutes: getPeriodMinutes(g, timePeriod),
+    color: tint(i, sliceCount), ink: i < 2 ? '#fffdfa' : 'var(--text-secondary)',
+  }));
+  if (restTotal > 0) {
+    slices.push({ id: 'other', name: `${rest.length} other game${rest.length === 1 ? '' : 's'}`, minutes: restTotal, color: 'rgba(42,38,33,0.12)', ink: 'var(--text-secondary)' });
+  }
+
+  return (
+    <section>
+      <SectionHeading title="Where the time went" trailing={`${formatHours(totalPeriodMinutes)} total`} />
+      <div style={{ display: 'flex', gap: 3, height: 52, marginBottom: 24 }}>
+        {slices.map(s => {
+          const pct = totalPeriodMinutes > 0 ? (s.minutes / totalPeriodMinutes) * 100 : 0;
+          return (
+            <div key={s.id} title={`${s.name} — ${formatHours(s.minutes)}`} style={{
+              width: `${pct}%`, background: s.color, borderRadius: 8,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+            }}>
+              {pct > 5.5 && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: s.ink, whiteSpace: 'nowrap' }}>
+                  {Math.round(pct)}%
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '0 48px' }}>
+        {slices.map(s => (
+          <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+            <span style={{ width: 9, height: 9, borderRadius: 3, flexShrink: 0, background: s.color }} />
+            <span style={{ flex: 1, fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {s.name}
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)', flexShrink: 0 }}>
+              {totalPeriodMinutes > 0 ? Math.round((s.minutes / totalPeriodMinutes) * 100) : 0}%
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text-primary)', width: 52, textAlign: 'right', flexShrink: 0 }}>
+              {formatHours(s.minutes)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function FooterStats({ ownedGames, gamesPlayed, totalLaunches, avgSessionHours, localConfig, sinceDate }) {
+  const items = [
+    { value: ownedGames.length.toLocaleString(), label: 'games owned' },
+    { value: gamesPlayed.toLocaleString(), label: `ever played · ${Math.round((gamesPlayed / Math.max(ownedGames.length, 1)) * 100)}%` },
+    localConfig?.found && totalLaunches > 0 && { value: totalLaunches.toLocaleString(), label: 'launches' },
+    localConfig?.found && avgSessionHours > 0 && { value: `${avgSessionHours.toFixed(1)}h`, label: 'average session' },
+  ].filter(Boolean);
+
+  return (
+    <section style={{ borderTop: '1px solid var(--border-default)', paddingTop: 24, display: 'flex', flexWrap: 'wrap', gap: 44 }}>
+      {items.map(it => (
+        <div key={it.label}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 19, color: 'var(--text-primary)' }}>{it.value}</div>
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>{it.label}</div>
+        </div>
+      ))}
+      <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)', alignSelf: 'flex-end' }}>
+        Steam API{sinceDate ? ` · local snapshots since ${sinceDate}` : ''}
+      </div>
+    </section>
+  );
+}
+
+function EmptyState({ timePeriod }) {
+  const meta = PERIOD_META[timePeriod];
+  return (
+    <div style={{ textAlign: 'center', padding: '96px 40px', color: 'var(--text-muted)' }}>
+      <div style={{ fontSize: 40, marginBottom: 16 }}>🎮</div>
+      <h3 style={{ fontSize: 19, marginBottom: 8, color: 'var(--text-secondary)' }}>No playtime data for this period</h3>
+      <p style={{ fontSize: 14 }}>
+        {timePeriod === 'alltime' ? 'No games with recorded playtime yet.' : `No games played ${meta.phrase}.`}
+      </p>
     </div>
   );
 }
 
 export default function Dashboard() {
-  const { profile, ownedGames, recentGames, totalHoursAllTime, totalHoursRecent, gamesPlayed, timePeriod, localConfig, achCache } = useApp();
+  const {
+    ownedGames, getGamesForPeriod, gamesPlayed, timePeriod,
+    localConfig, achCache, steamId,
+  } = useApp();
   const [selectedGame, setSelectedGame] = useState(null);
   const [anchorRect, setAnchorRect] = useState(null);
 
@@ -233,146 +352,67 @@ export default function Dashboard() {
     }
   }, [selectedGame]);
 
-  const periodGames = timePeriod === 'alltime'
-    ? [...ownedGames].filter(g => g.playtime_forever > 0).sort((a, b) => b.playtime_forever - a.playtime_forever)
-    : [...recentGames].map(rg => {
-        const full = ownedGames.find(og => og.appid === rg.appid) || {};
-        return { ...full, ...rg };
-      }).sort((a, b) => (b.playtime_2weeks || 0) - (a.playtime_2weeks || 0));
+  const periodGames = [...getGamesForPeriod()]
+    .filter(g => getPeriodMinutes(g, timePeriod) > 0)
+    .sort((a, b) => getPeriodMinutes(b, timePeriod) - getPeriodMinutes(a, timePeriod));
 
-  const heroGame = periodGames[0];
-  const otherGames = periodGames.slice(1);
-
-  const totalPeriodHours = timePeriod === 'alltime'
-    ? totalHoursAllTime
-    : totalHoursRecent;
+  const totalPeriodMinutes = periodGames.reduce((s, g) => s + getPeriodMinutes(g, timePeriod), 0);
 
   const avgSessionHours = ownedGames.reduce((sum, g) => {
-    if (g.launchCount && g.playtime_forever) {
-      return sum + (g.playtime_forever / 60 / g.launchCount);
-    }
+    if (g.launchCount && g.playtime_forever) return sum + (g.playtime_forever / 60 / g.launchCount);
     return sum;
   }, 0) / Math.max(ownedGames.filter(g => g.launchCount).length, 1);
-
   const totalLaunches = ownedGames.reduce((sum, g) => sum + (g.launchCount || 0), 0);
 
+  const firstSnapshotDate = steamId ? loadSnapshots(steamId)[0]?.date : null;
+  const sinceDate = firstSnapshotDate
+    ? new Date(firstSnapshotDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
+
+  const heroGame = periodGames[0];
+  const alsoActive = periodGames.slice(1, 4);
+
   return (
-    <div style={{ padding: '28px 24px', maxWidth: 1400, margin: '0 auto' }}>
+    <div style={{ maxWidth: 1180, margin: '0 auto', padding: '56px 24px 96px', display: 'flex', flexDirection: 'column', gap: 56 }}>
+      {periodGames.length === 0 ? (
+        <EmptyState timePeriod={timePeriod} />
+      ) : (
+        <>
+          <HeroSection periodGames={periodGames} totalPeriodMinutes={totalPeriodMinutes} timePeriod={timePeriod} steamId={steamId} />
 
-      {/* Streak + personal percentile — builds up once daily snapshots
-          accumulate; renders nothing until there's enough history */}
-      <StreakAndPercentile />
+          <section>
+            <SectionHeading title="In focus" />
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: alsoActive.length ? 'minmax(0,1.7fr) minmax(0,1fr)' : '1fr',
+              gap: 20, alignItems: 'stretch',
+            }}>
+              <FocusCard
+                game={heroGame} timePeriod={timePeriod}
+                periodMinutes={getPeriodMinutes(heroGame, timePeriod)}
+                totalPeriodMinutes={totalPeriodMinutes} steamId={steamId}
+                onClick={e => handleSelectGame(heroGame, e)}
+              />
+              {alsoActive.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {alsoActive.map(g => (
+                    <ActiveRow key={g.appid} game={g} timePeriod={timePeriod} onClick={e => handleSelectGame(g, e)} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
 
-      {/* Summary stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 28 }}>
-        <StatCard
-          label={timePeriod === 'alltime' ? 'Total Hours' : 'Hours (2 Weeks)'}
-          value={`${Math.round(timePeriod === 'alltime' ? totalHoursAllTime : totalHoursRecent).toLocaleString()}h`}
-          icon="⏱"
-          color="blue"
-        />
-        <StatCard
-          label="Games Owned"
-          value={ownedGames.length.toLocaleString()}
-          icon="📦"
-          color="violet"
-        />
-        <StatCard
-          label="Games Played"
-          value={gamesPlayed.toLocaleString()}
-          icon="🎮"
-          color="emerald"
-          subtitle={`${Math.round((gamesPlayed / Math.max(ownedGames.length, 1)) * 100)}% of library`}
-        />
-        {localConfig?.found && totalLaunches > 0 && (
-          <StatCard
-            label="Total Launches"
-            value={totalLaunches.toLocaleString()}
-            icon="🚀"
-            color="amber"
-          />
-        )}
-        {localConfig?.found && avgSessionHours > 0 && (
-          <StatCard
-            label="Avg Session"
-            value={`${avgSessionHours.toFixed(1)}h`}
-            icon="📊"
-            color="rose"
-          />
-        )}
-        {timePeriod === '2weeks' && recentGames.length > 0 && (
-          <StatCard
-            label="Active Games"
-            value={recentGames.length}
-            icon="🔥"
-            color="amber"
-            subtitle="in last 2 weeks"
-          />
-        )}
-      </div>
+          <TimeBreakdown periodGames={periodGames} timePeriod={timePeriod} totalPeriodMinutes={totalPeriodMinutes} />
 
-      {/* No data state */}
-      {periodGames.length === 0 && (
-        <div style={{
-          textAlign: 'center', padding: '80px 40px',
-          color: 'var(--text-muted)',
-        }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🎮</div>
-          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 8, color: 'var(--text-secondary)' }}>
-            No playtime data for this period
-          </h3>
-          <p style={{ fontSize: 14 }}>
-            {timePeriod === '2weeks' ? 'No games played in the last 2 weeks.' : 'No games with recorded playtime.'}
-          </p>
-        </div>
-      )}
-
-      {/* Hero + grid layout */}
-      {heroGame && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
-
-          {/* Time breakdown donut — additive, sits above hero */}
-          {periodGames.length > 1 && (
-            <PlaytimeDonut
-              games={periodGames}
-              totalPeriodMinutes={timePeriod === 'alltime' ? ownedGames.reduce((s, g) => s + (g.playtime_forever || 0), 0) : recentGames.reduce((s, g) => s + (g.playtime_2weeks || 0), 0)}
-              totalAllTimeMinutes={ownedGames.reduce((s, g) => s + (g.playtime_forever || 0), 0)}
-              timePeriod={timePeriod}
-              ownedGames={ownedGames}
-            />
-          )}
-
-          {/* Hero card */}
-          <div onClick={(e) => handleSelectGame(heroGame, e)} style={{ cursor: 'pointer' }}>
-            <HeroGameCard game={heroGame} />
-          </div>
-
-          {/* What Should I Play Tonight — instant filter over the backlog,
-              sits below the hero/active-games section since it's about
-              what's NOT being played yet */}
           <TonightPick />
 
-          {/* Game grid — no layout shift, panel floats over */}
-          {otherGames.length > 0 && (
-            <div>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 16, letterSpacing: '-0.2px' }}>
-                {timePeriod === 'alltime' ? 'All Played Games' : 'Also Played'}
-              </h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
-                {otherGames.map((game, i) => (
-                  <GameCard
-                    key={game.appid}
-                    game={game}
-                    rank={i + 2}
-                    onClick={handleSelectGame}
-                    isSelected={selectedGame?.appid === game.appid}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+          <FooterStats
+            ownedGames={ownedGames} gamesPlayed={gamesPlayed}
+            totalLaunches={totalLaunches} avgSessionHours={avgSessionHours}
+            localConfig={localConfig} sinceDate={sinceDate}
+          />
 
-          {/* Floating detail panel */}
           {selectedGame && (
             <GameDetailPanel
               game={selectedGame}
@@ -381,7 +421,7 @@ export default function Dashboard() {
               onClose={() => { setSelectedGame(null); setAnchorRect(null); }}
             />
           )}
-        </div>
+        </>
       )}
     </div>
   );
