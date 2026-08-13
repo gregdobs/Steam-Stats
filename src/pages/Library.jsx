@@ -4,7 +4,6 @@ import { formatHours } from '../utils/steam.js';
 import { GameHeader } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
 import GenreAllocation from '../components/GenreAllocation.jsx';
-import SessionInsights from '../components/SessionInsights.jsx';
 import { ACCENT_HEX, hexToRgba, categoryColor, PageHeader } from '../components/designSystem.jsx';
 
 // ── Colour tokens ──────────────────────────────────────────────────────────
@@ -381,9 +380,6 @@ export default function Library() {
 
       {/* Genre allocation */}
       <GenreAllocation />
-
-      {/* Session insights (requires local Steam data) */}
-      <SessionInsights />
 
       {/* Charts row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
