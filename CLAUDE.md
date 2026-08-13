@@ -7,7 +7,7 @@ Personal gaming analytics dashboard powered by the Steam Web API, HowLongToBeat,
 - **Frontend**: React 18 + Vite 5, Chart.js / react-chartjs-2 for charts. Plain CSS (`src/App.css`, `src/index.css`), no CSS framework.
 - **Backend**: Express server (`server.js`) — hand-rolled HowLongToBeat scraper and VDF parser live here (no `howlongtobeat-core` or `vdf-parser` packages, those were removed as dead deps).
 - **Dev run**: `npm run dev` — runs server (port 3001) + Vite frontend (port 5173) concurrently via `concurrently`.
-- **Packaging**: `npm run build:release` → `build-release.js` bundles frontend + a minimal server-only `node_modules` + a standalone `node.exe` into `release/`, launched via `bootstrap.cjs` and a `tray-runner.cjs` (uses `systray2`) for a tray-icon-based distributable `.exe`. Package.json also has `pkg`-based single-target builds (`build:exe`, `build:exe:win`) but the release-folder approach is the documented/preferred distribution method (see README's "Why not a single file?" section).
+- **Packaging**: `npm run build:release` → `build-release.js` bundles frontend + a minimal server-only `node_modules` + a standalone `node.exe` into `release/`, launched via `bootstrap.cjs` and a visible-console `Start Steam Stats.bat`. (A tray-icon/hidden-console launcher via `systray2` was tried and removed — added complexity and an untested code path for a solo-use local app; the plain console window is simpler to debug.) Package.json also has `pkg`-based single-target builds (`build:exe`, `build:exe:win`) but the release-folder approach is the documented/preferred distribution method (see README's "Why not a single file?" section).
 - Node >= 22 required (`engines` in package.json).
 
 ## Project layout

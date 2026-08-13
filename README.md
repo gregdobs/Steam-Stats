@@ -162,19 +162,17 @@ This runs everything automatically:
 1. Builds the frontend (`npm run build`)
 2. Compiles `bootstrap.cjs` into `Steam Stats.exe` via pkg
 3. Downloads a standalone `node.exe` to bundle alongside it (needed so the packaged app doesn't try to relaunch itself — only happens once, cached afterward)
-4. Copies `server.js`, `tray-runner.cjs`, and the built frontend alongside it
-5. Installs a minimal, server-only `node_modules` — just `express`, `cors`, `helmet`, `axios`, and `systray2`, not the full frontend dev dependency tree
-6. Writes the launchers and a `README.txt` for whoever you send it to
+4. Copies `server.js` and the built frontend alongside it
+5. Installs a minimal, server-only `node_modules` — just `express`, `cors`, `helmet`, and `axios`, not the full frontend dev dependency tree
+6. Writes the launcher and a `README.txt` for whoever you send it to
 
 Output lands in `release/`. Zip that whole folder — that's the distributable.
 
-**Running it:** double-click **`Start Steam Stats.vbs`** — no console window appears, but a tray icon shows up near the clock, and a browser tab opens automatically. Right-click the tray icon for Open/Quit. If something's not working and you want to see what's happening, use **`Start Steam Stats (debug).bat`** instead — it keeps a visible console window with logs.
+**Running it:** double-click **`Start Steam Stats.bat`** — a console window shows startup logs, and a browser tab opens automatically once the server is ready. Close the console window to stop the app.
 
 **Why not a single file?** pkg's executable alone can't reliably include `node_modules` (native bindings, dynamic requires, and file-size bloat make that fragile). Shipping `server.js` + `dist/` + a minimal `node_modules` alongside a small bootstrap `.exe` is the standard, reliable pattern — the folder is still just one download, one zip, one double-click for whoever you send it to.
 
 **First build note:** the very first time you run `build:release`, pkg downloads a prebuilt Node.js binary (~40–80MB) to embed in the executable, and the script separately downloads a standalone `node.exe` for the release folder. Both need normal internet access and only happen once — pkg's download is cached in `~/.pkg-cache` afterward.
-
-> **Heads up:** the tray icon and hidden-console behavior are implemented defensively (with a fallback to the visible debug launcher if tray init fails) but haven't been verified hands-on on a real Windows machine yet — only built and reasoned through. Worth a real test run before sending a release to anyone else.
 
 ---
 
