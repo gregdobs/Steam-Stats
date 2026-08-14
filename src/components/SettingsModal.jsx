@@ -806,16 +806,68 @@ function DisplaySettings() {
   );
 }
 
+// Raw log of saved snapshots — moved here from the History page, which was
+// the only section there that wasn't a visualization. Belongs next to the
+// snapshot count a debugging/data-management context wants, not in the
+// user-facing analytics flow.
+function SnapshotTimeline({ snapshots }) {
+  if (!snapshots || snapshots.length === 0) {
+    return (
+      <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+        No snapshots yet. Snapshots are saved each time you open the app.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, maxHeight: 280, overflowY: 'auto' }}>
+      {[...snapshots].reverse().slice(0, 30).map((snap, i) => {
+        const date = new Date(snap.timestamp);
+        const totalMinutes = (snap.games || []).reduce((s, g) => s + (g.playtime_forever || 0), 0);
+
+        return (
+          <div key={i} style={{
+            display: 'flex', gap: 16, padding: '10px 0',
+            borderBottom: '1px solid var(--border-subtle)',
+            alignItems: 'center',
+          }}>
+            <div style={{ width: 110, flexShrink: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>
+                {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+                {date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                {(snap.games || []).length} games · {Math.round(totalMinutes / 60).toLocaleString()}h total
+              </div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                {(snap.recentGames || []).slice(0, 3).map(g => g.appid).join(', ') || '—'}
+              </div>
+            </div>
+            <div style={{ flexShrink: 0 }}>
+              <span className="badge badge-blue">Snapshot</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Data & Cache Section ───────────────────────────────────
 function DataSettings() {
   const { steamId } = useApp();
-  const [snapshotCount, setSnapshotCount] = useState(0);
+  const [snapshots, setSnapshots] = useState([]);
   const [cleared, setCleared] = useState('');
+  const [showLog, setShowLog] = useState(false);
 
   useEffect(() => {
     try {
       const all = JSON.parse(localStorage.getItem('steam_dashboard_snapshots') || '{}');
-      setSnapshotCount((all[steamId] || []).length);
+      setSnapshots(all[steamId] || []);
     } catch {}
   }, [steamId]);
 
@@ -824,7 +876,7 @@ function DataSettings() {
       const all = JSON.parse(localStorage.getItem('steam_dashboard_snapshots') || '{}');
       delete all[steamId];
       localStorage.setItem('steam_dashboard_snapshots', JSON.stringify(all));
-      setSnapshotCount(0); setCleared('snapshots');
+      setSnapshots([]); setCleared('snapshots');
     } catch {}
   };
 
@@ -837,11 +889,19 @@ function DataSettings() {
   return (
     <Section title="Data & Cache">
       <Row label="Saved Snapshots" description="Daily snapshots power the History trend charts.">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{snapshotCount} snapshots</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{snapshots.length} snapshots</span>
+          <button className="btn btn-ghost" onClick={() => setShowLog(s => !s)} style={{ fontSize: 12, padding: '4px 10px' }}>
+            {showLog ? 'Hide log' : 'View log'}
+          </button>
           <button className="btn btn-ghost" onClick={clearSnapshots} style={{ fontSize: 12, padding: '4px 10px', color: 'var(--accent-rose)', borderColor: 'var(--accent-rose)' }}>Clear</button>
         </div>
       </Row>
+      {showLog && (
+        <div style={{ padding: '4px 20px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <SnapshotTimeline snapshots={snapshots} />
+        </div>
+      )}
       <Row label="Reset Everything" description="Clears all saved data, config, and reloads the page." last>
         <button className="btn btn-ghost" onClick={clearAll} style={{ fontSize: 12, padding: '4px 10px', color: 'var(--accent-rose)', borderColor: 'var(--accent-rose)' }}>
           {cleared === 'all' ? '✓ Reloading...' : 'Reset App'}

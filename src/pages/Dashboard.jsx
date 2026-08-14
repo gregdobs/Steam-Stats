@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
 import {
   formatHours, minutesToHours, formatLastPlayed, loadSnapshots,
-  computePlayStreak, computeWindowPercentile,
+  computePlayStreak, computeWindowPercentile, computeDeckSplit,
   getDailyPlaytimeSeries, getDailyPlaytimeSeriesForGame,
 } from '../utils/steam.js';
 import { GameCapsule } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
 import TonightPick from '../components/TonightPick.jsx';
+import { ALL_TIME_PERIODS, loadFeatureFlags, SourceBadge } from '../components/Navbar.jsx';
 import { ACCENT_HEX, hexToRgba, tint, SectionHeading, StatCell } from '../components/designSystem.jsx';
 
 const PERIOD_META = {
@@ -62,7 +63,66 @@ function BarStrip({ series, height = 96, highlightRecent = false, leftLabel, rig
   );
 }
 
-function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId }) {
+// The 7 Days/2 Weeks/30 Days/All Time control — only Dashboard reads
+// timePeriod/getGamesForPeriod, so it lives in this page's own header
+// instead of the global Navbar, where it used to sit fully interactive but
+// inert on every other page.
+function PeriodToggle({ enabledPeriods, timePeriod, setTimePeriod, hoveredPeriod, setHoveredPeriod }) {
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <div style={{
+        display: 'flex', gap: 2, padding: 3,
+        background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-full)',
+        border: '1px solid var(--border-subtle)',
+      }}>
+        {enabledPeriods.map(p => {
+          const isActive = timePeriod === p.id;
+          return (
+            <button
+              key={p.id}
+              onClick={() => setTimePeriod(p.id)}
+              onMouseEnter={() => setHoveredPeriod(p.id)}
+              onMouseLeave={() => setHoveredPeriod(null)}
+              title={p.tooltip}
+              style={{
+                background: isActive ? 'var(--bg-secondary)' : 'transparent',
+                border: isActive ? '1px solid var(--border-default)' : '1px solid transparent',
+                borderRadius: 'var(--radius-full)',
+                padding: '4px 11px',
+                cursor: 'pointer',
+                color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
+                fontFamily: 'var(--font-mono)', transition: 'all 0.15s ease',
+                boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+              }}
+            >
+              <span style={{ fontSize: 11.5, fontWeight: isActive ? 500 : 400, lineHeight: 1 }}>{p.label}</span>
+              <SourceBadge source={p.source} active={isActive} />
+            </button>
+          );
+        })}
+      </div>
+
+      {hoveredPeriod && (() => {
+        const p = ALL_TIME_PERIODS.find(p => p.id === hoveredPeriod);
+        return (
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+            background: 'var(--text-primary)', color: 'var(--text-inverse)',
+            padding: '6px 10px', borderRadius: 'var(--radius-sm)',
+            fontSize: 11, whiteSpace: 'nowrap', zIndex: 200,
+            pointerEvents: 'none', animation: 'fadeInFast 0.1s ease',
+          }}>
+            <span style={{ fontWeight: 700 }}>{p?.label}</span>{' — '}
+            <span style={{ opacity: 0.8 }}>{p?.tooltip}</span>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId, periodToggleProps }) {
   const meta = PERIOD_META[timePeriod];
   const streak = steamId ? computePlayStreak(steamId) : null;
   const windowPct = (steamId && meta.days) ? computeWindowPercentile(steamId, meta.days) : null;
@@ -89,6 +149,7 @@ function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId }) {
             {PERIOD_EYEBROW[timePeriod]}
           </span>
           <span style={{ height: 1, flex: 1, background: 'var(--border-default)' }} />
+          <PeriodToggle {...periodToggleProps} timePeriod={timePeriod} />
         </div>
         <h1 style={{ margin: 0, fontSize: 'clamp(26px, 3.2vw, 40px)', lineHeight: 1.22, fontWeight: 400, letterSpacing: '-0.9px', color: 'var(--text-primary)' }}>
           <span style={{ fontWeight: 600 }}>{hoursLabel} hours</span>
@@ -256,11 +317,16 @@ function TimeBreakdown({ periodGames, timePeriod, totalPeriodMinutes }) {
 }
 
 function FooterStats({ ownedGames, gamesPlayed, totalLaunches, avgSessionHours, localConfig, sinceDate }) {
+  // Desktop-vs-Deck folded in as one more chip here rather than its own
+  // section — it's a static, all-time fact with nothing to do with it, so
+  // it's sized to match (a stat, not a headline).
+  const deckSplit = computeDeckSplit(ownedGames);
   const items = [
     { value: ownedGames.length.toLocaleString(), label: 'games owned' },
     { value: gamesPlayed.toLocaleString(), label: `ever played · ${Math.round((gamesPlayed / Math.max(ownedGames.length, 1)) * 100)}%` },
     localConfig?.found && totalLaunches > 0 && { value: totalLaunches.toLocaleString(), label: 'launches' },
     localConfig?.found && avgSessionHours > 0 && { value: `${avgSessionHours.toFixed(1)}h`, label: 'average session' },
+    deckSplit && { value: `${deckSplit.deckPct}%`, label: 'of hours on Steam Deck' },
   ].filter(Boolean);
 
   return (
@@ -293,11 +359,32 @@ function EmptyState({ timePeriod }) {
 
 export default function Dashboard() {
   const {
-    ownedGames, getGamesForPeriod, gamesPlayed, timePeriod,
+    ownedGames, getGamesForPeriod, gamesPlayed, timePeriod, setTimePeriod,
     localConfig, achCache, steamId,
   } = useApp();
   const [selectedGame, setSelectedGame] = useState(null);
   const [anchorRect, setAnchorRect] = useState(null);
+
+  // Period-toggle state — moved here from Navbar, since this is the only
+  // page that reads timePeriod/getGamesForPeriod.
+  const [hoveredPeriod, setHoveredPeriod] = useState(null);
+  const [featureFlags, setFeatureFlags] = useState(loadFeatureFlags);
+
+  useEffect(() => {
+    const onStorage = () => setFeatureFlags(loadFeatureFlags());
+    window.addEventListener('storage', onStorage);
+    // Also poll for changes made in the same tab (Settings modal)
+    const interval = setInterval(() => setFeatureFlags(loadFeatureFlags()), 500);
+    return () => { window.removeEventListener('storage', onStorage); clearInterval(interval); };
+  }, []);
+
+  // Filter to only enabled periods; if the current one is now disabled, reset to 2weeks
+  const enabledPeriods = ALL_TIME_PERIODS.filter(p => !p.experimental || featureFlags[`period_${p.id}`]);
+  useEffect(() => {
+    if (!enabledPeriods.find(p => p.id === timePeriod)) {
+      setTimePeriod('2weeks');
+    }
+  }, [featureFlags]);
 
   // Clear selection when period changes
   useEffect(() => { setSelectedGame(null); setAnchorRect(null); }, [timePeriod]);
@@ -337,7 +424,12 @@ export default function Dashboard() {
         <EmptyState timePeriod={timePeriod} />
       ) : (
         <>
-          <HeroSection periodGames={periodGames} totalPeriodMinutes={totalPeriodMinutes} timePeriod={timePeriod} steamId={steamId} />
+          <HeroSection
+            periodGames={periodGames} totalPeriodMinutes={totalPeriodMinutes} timePeriod={timePeriod} steamId={steamId}
+            periodToggleProps={{ enabledPeriods, setTimePeriod, hoveredPeriod, setHoveredPeriod }}
+          />
+
+          <TonightPick />
 
           <section>
             <SectionHeading title="In focus" />
@@ -363,8 +455,6 @@ export default function Dashboard() {
           </section>
 
           <TimeBreakdown periodGames={periodGames} timePeriod={timePeriod} totalPeriodMinutes={totalPeriodMinutes} />
-
-          <TonightPick />
 
           <FooterStats
             ownedGames={ownedGames} gamesPlayed={gamesPlayed}

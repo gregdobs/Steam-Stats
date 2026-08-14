@@ -378,9 +378,6 @@ export default function Library() {
         />
       </div>
 
-      {/* Genre allocation */}
-      <GenreAllocation />
-
       {/* Charts row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
 
@@ -429,6 +426,12 @@ export default function Library() {
         </div>
         <TopGamesBar games={baseSorted} activeFilter={activeFilter} onFilter={handleFilter} theme={theme} />
       </div>
+
+      {/* Genre allocation — sits after the instant-loading charts above since
+          it depends on a rate-limited background fetch (server.js fetches
+          one game's genre every ~1.2s) that can take minutes to fill in on a
+          cold cache; it shouldn't be the first thing the page makes you wait on. */}
+      <GenreAllocation />
 
       {/* Game table */}
       <div className="card" style={{ padding: 24 }} ref={tableRef}>

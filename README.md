@@ -77,7 +77,8 @@ Then open `http://localhost:5173` as before. Each window needs Ctrl+C separately
 - Game grid with period vs. all-time comparison; toggle between **Last 2 Weeks** and **All Time** (7-Day and 30-Day periods are available as opt-in experimental toggles — see Settings → Display)
 - **Play Streak** — current consecutive-day streak, with 2 "grace days" built in so a single missed day doesn't reset your progress. Builds up automatically from daily snapshots; needs a couple of days of use before it has anything to show.
 - **Personal Percentile** — "Top 10% of your days" style framing, compared only against *your own* play history, never other players. Needs 7+ tracked days for a daily read, 21+ for a weekly one.
-- **What Should I Play Tonight** — an instant recommender over your unplayed backlog, filterable by how much time you have and by genre, ranked by known HowLongToBeat length where available.
+- **What Should I Play Tonight** — a random, unfiltered pick from anything with under 3 hours logged (untouched or barely started). Comes with 3 rerolls before it commits you to the answer.
+- **Desktop vs. Deck** — what share of your all-time hours were played on Steam Deck, when that's ever been the case.
 
 ### 📚 Library
 - Genre allocation and session-insight panels (session data requires local Steam data — see below)
@@ -90,10 +91,12 @@ Then open `http://localhost:5173` as before. Each window needs Ctrl+C separately
 - Unplayed games list with a burn-down projection ("at your current pace, clearing your backlog would take ~X weeks") — uses real HowLongToBeat estimates where cached, falls back to a conservative flat estimate otherwise
 - Backlog momentum — whether your unplayed count is growing or shrinking over the last couple weeks
 - Backlog breakdown by genre
+- Backlog graveyard — the unplayed games that have sat untouched the longest, since Steam Stats started tracking them
 - "Pick for me" randomizer
 
 ### 🏆 Achievements
 - Completion % for up to 100 games
+- Rarest Unlocks — the achievements you've earned that the smallest share of other players have, pulled from Steam's global achievement stats
 - Filter by Perfect / Almost / In Progress
 - Global achievement stats
 
@@ -103,6 +106,7 @@ Then open `http://localhost:5173` as before. Each window needs Ctrl+C separately
 
 ### 📈 History
 - Trend line chart from cached daily snapshots
+- Day-of-week pattern — average hours played per weekday, once ~2 weeks of history has built up
 - 52-week activity heatmap
 - Gets richer every day you open the app — this is also what powers the Dashboard's streak and percentile stats
 

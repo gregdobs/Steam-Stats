@@ -9,7 +9,11 @@ import {
 const AppContext = createContext(null);
 
 const HLTB_CACHE_KEY = 'steam_dashboard_hltb_cache';
-const ACH_CACHE_KEY = 'steam_dashboard_achievement_cache';
+// v2: cached entries now also carry earnedDetails (per-achievement name/icon/
+// unlock time), used by the Achievement Rarity widget — bumped so older
+// cached entries that predate that field get refetched instead of being
+// treated as already-complete and silently missing rarity data forever.
+const ACH_CACHE_KEY = 'steam_dashboard_achievement_cache_v2';
 
 function loadHltbCacheFromStorage() {
   try { return JSON.parse(localStorage.getItem(HLTB_CACHE_KEY) || '{}'); }
