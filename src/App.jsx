@@ -3,10 +3,9 @@ import Navbar from './components/Navbar.jsx';
 import SetupScreen from './components/SetupScreen.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Library from './pages/Library.jsx';
-import Backlog from './pages/Backlog.jsx';
+import Progress from './pages/Progress.jsx';
 import Achievements from './pages/Achievements.jsx';
 import History from './pages/History.jsx';
-import Completion from './pages/Completion.jsx';
 
 function LoadingOverlay() {
   const { loadingPhase } = useApp();
@@ -47,10 +46,9 @@ function PageContent() {
   switch (activePage) {
     case 'dashboard': return <Dashboard />;
     case 'library': return <Library />;
-    case 'backlog': return <Backlog />;
+    case 'progress': return <Progress />;
     case 'achievements': return <Achievements />;
     case 'history': return <History />;
-    case 'hltb': return <Completion />;
     default: return <Dashboard />;
   }
 }

@@ -3,6 +3,7 @@ import { useApp } from '../hooks/useAppContext.jsx';
 import { formatLastPlayed } from '../utils/steam.js';
 import { GameHeader } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
+import AchievementRarity from '../components/AchievementRarity.jsx';
 import { ProgressRing, PageHeader } from '../components/designSystem.jsx';
 
 function AchievementCard({ game, achData, onClick, isSelected, spotlight }) {
@@ -195,6 +196,8 @@ export default function Achievements() {
           </div>
         ))}
       </div>
+
+      <AchievementRarity games={playedGames} achCache={achData} />
 
       {/* Filters + sort */}
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>

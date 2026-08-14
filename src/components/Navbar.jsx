@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
 import SettingsModal from './SettingsModal.jsx';
 import ShareCard from './ShareCard.jsx';
@@ -33,14 +33,11 @@ const NAV_ICONS = {
   library: (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><rect x="2.5" y="2.5" width="4" height="11" rx="1.2"></rect><rect x="9.5" y="2.5" width="4" height="11" rx="1.2"></rect></svg>
   ),
-  backlog: (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M8 2.5v7"></path><path d="M5 7l3 3 3-3"></path><path d="M2.5 12.5h11"></path></svg>
+  progress: (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><rect x="1.5" y="6" width="13" height="4" rx="2"></rect><path d="M2.5 8h6" strokeWidth="2.2"></path></svg>
   ),
   achievements: (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="8" cy="6.5" r="4"></circle><path d="M5.6 10l-1 4L8 12.4 11.4 14l-1-4"></path></svg>
-  ),
-  hltb: (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="8" cy="8" r="5.5"></circle><circle cx="8" cy="8" r="1.6"></circle></svg>
   ),
   history: (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 11.5l3.5-4 3 2.5 4.5-6"></path></svg>
@@ -50,9 +47,8 @@ const NAV_ICONS = {
 const NAV_ITEMS = [
   { id: 'dashboard',    label: 'Dashboard' },
   { id: 'library',      label: 'Library' },
-  { id: 'backlog',      label: 'Backlog' },
+  { id: 'progress',     label: 'Progress' },
   { id: 'achievements', label: 'Achievements' },
-  { id: 'hltb',         label: 'Completion' },
   { id: 'history',      label: 'History' },
 ];
 
@@ -75,7 +71,7 @@ const STATUS_LABELS = {
   offline: 'Offline', disconnected: 'Not connected',
 };
 
-function SourceBadge({ source, active }) {
+export function SourceBadge({ source, active }) {
   const isApi = source === 'api';
   return (
     <span style={{
@@ -97,30 +93,11 @@ function SourceBadge({ source, active }) {
 export default function Navbar() {
   const {
     theme, toggleTheme, profile, activePage, setActivePage,
-    timePeriod, setTimePeriod, dataLoaded, loadData, config,
+    dataLoaded, loadData, config,
   } = useApp();
 
   const [showSettings, setShowSettings] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
-  const [hoveredPeriod, setHoveredPeriod] = useState(null);
-  const [featureFlags, setFeatureFlags] = useState(loadFeatureFlags);
-
-  // Keep featureFlags in sync with localStorage changes (e.g. from Settings)
-  useEffect(() => {
-    const onStorage = () => setFeatureFlags(loadFeatureFlags());
-    window.addEventListener('storage', onStorage);
-    // Also poll for changes made in the same tab (Settings modal)
-    const interval = setInterval(() => setFeatureFlags(loadFeatureFlags()), 500);
-    return () => { window.removeEventListener('storage', onStorage); clearInterval(interval); };
-  }, []);
-
-  // Filter to only enabled periods; if current period is now disabled, reset to 2weeks
-  const enabledPeriods = ALL_TIME_PERIODS.filter(p => !p.experimental || featureFlags[`period_${p.id}`]);
-  useEffect(() => {
-    if (!enabledPeriods.find(p => p.id === timePeriod)) {
-      setTimePeriod('2weeks');
-    }
-  }, [featureFlags]);
 
   const connStatus = getConnectionStatus(profile, dataLoaded);
   const statusColor = STATUS_COLORS[connStatus];
@@ -167,62 +144,6 @@ export default function Navbar() {
         )}
 
         <div style={{ flex: dataLoaded ? 0 : 1 }} />
-
-        {/* Time period toggle */}
-        {dataLoaded && (
-          <div style={{ position: 'relative' }}>
-            <div style={{
-              display: 'flex', gap: 2, padding: 3,
-              background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-full)',
-              border: '1px solid var(--border-subtle)',
-            }}>
-              {enabledPeriods.map(p => {
-                const isActive = timePeriod === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => setTimePeriod(p.id)}
-                    onMouseEnter={() => setHoveredPeriod(p.id)}
-                    onMouseLeave={() => setHoveredPeriod(null)}
-                    title={p.tooltip}
-                    style={{
-                      background: isActive ? 'var(--bg-secondary)' : 'transparent',
-                      border: isActive ? '1px solid var(--border-default)' : '1px solid transparent',
-                      borderRadius: 'var(--radius-full)',
-                      padding: '4px 11px',
-                      cursor: 'pointer',
-                      color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
-                      fontFamily: 'var(--font-mono)', transition: 'all 0.15s ease',
-                      boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                    }}
-                  >
-                    <span style={{ fontSize: 11.5, fontWeight: isActive ? 500 : 400, lineHeight: 1 }}>{p.label}</span>
-                    <SourceBadge source={p.source} active={isActive} />
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Hover tooltip */}
-            {hoveredPeriod && (() => {
-              const p = ALL_TIME_PERIODS.find(p => p.id === hoveredPeriod);
-              return (
-                <div style={{
-                  position: 'absolute', top: 'calc(100% + 8px)', left: '50%',
-                  transform: 'translateX(-50%)',
-                  background: 'var(--text-primary)', color: 'var(--text-inverse)',
-                  padding: '6px 10px', borderRadius: 'var(--radius-sm)',
-                  fontSize: 11, whiteSpace: 'nowrap', zIndex: 200,
-                  pointerEvents: 'none', animation: 'fadeInFast 0.1s ease',
-                }}>
-                  <span style={{ fontWeight: 700 }}>{p?.label}</span>{' — '}
-                  <span style={{ opacity: 0.8 }}>{p?.tooltip}</span>
-                </div>
-              );
-            })()}
-          </div>
-        )}
 
         {/* Right side */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

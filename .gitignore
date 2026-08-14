@@ -29,6 +29,9 @@ dist-ssr
 # Genre cache (regenerated automatically, can be large)
 .genre-cache.json
 
+# Achievement rarity cache (regenerated automatically)
+.rarity-cache.json
+
 # Release build output
 dist-exe/
 release/

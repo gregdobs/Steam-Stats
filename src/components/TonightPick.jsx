@@ -1,48 +1,95 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
-import { fetchGenres, recommendTonight } from '../utils/steam.js';
+import { fetchGenres } from '../utils/steam.js';
 import { GameHeader } from './GameImage.jsx';
 
-const BUDGETS = [
-  { label: 'any', value: null },
-  { label: '<5h', value: 5 },
-  { label: '<10h', value: 10 },
-  { label: '<20h', value: 20 },
+const REROLL_BUDGET = 3;
+const PLAYTIME_CEILING_MINUTES = 180; // < 3 hours
+
+// Two pools, one picker — this used to be two separate features (this one,
+// and Backlog's "Pick For Me") built independently with different rules.
+// "Quick" answers "something short tonight"; "Anything unplayed" answers
+// "I can't decide what to start next" — Pick For Me's old job, folded in
+// here instead of living as an uncoordinated duplicate slot machine.
+const POOL_MODES = [
+  { id: 'quick', label: 'Quick (<3h)' },
+  { id: 'anything', label: 'Anything unplayed' },
 ];
 
 export default function TonightPick() {
-  const { ownedGames, hltbCache } = useApp();
-  const [maxHours, setMaxHours] = useState(null);
+  const { ownedGames } = useApp();
+  const [poolMode, setPoolMode] = useState('quick');
   const [genreData, setGenreData] = useState({});
+  const [spinning, setSpinning] = useState(false);
+  const [displayGame, setDisplayGame] = useState(null);
+  const [pick, setPick] = useState(null);
+  const [rerollsUsed, setRerollsUsed] = useState(0);
+  const spinRef = useRef(null);
   const pollRef = useRef(null);
 
-  const unplayedGames = useMemo(
+  const quickPool = useMemo(
+    () => ownedGames.filter(g => (g.playtime_forever || 0) < PLAYTIME_CEILING_MINUTES),
+    [ownedGames]
+  );
+  const anythingPool = useMemo(
     () => ownedGames.filter(g => !g.playtime_forever || g.playtime_forever === 0),
     [ownedGames]
   );
+  const pool = poolMode === 'quick' ? quickPool : anythingPool;
 
-  const results = useMemo(
-    () => recommendTonight(unplayedGames, hltbCache, {}, { maxHours }),
-    [unplayedGames, hltbCache, maxHours]
-  );
+  const spin = useCallback((isReroll) => {
+    if (pool.length === 0) return;
+    if (isReroll && rerollsUsed >= REROLL_BUDGET) return;
+    setSpinning(true);
+    setPick(null);
+    let ticks = 0;
+    const totalTicks = 18 + Math.floor(Math.random() * 8);
+    clearInterval(spinRef.current);
+    spinRef.current = setInterval(() => {
+      const g = pool[Math.floor(Math.random() * pool.length)];
+      setDisplayGame(g);
+      ticks++;
+      if (ticks >= totalTicks) {
+        clearInterval(spinRef.current);
+        setSpinning(false);
+        setPick(g);
+        if (isReroll) setRerollsUsed(c => c + 1);
+      }
+    }, 70 + ticks * 4); // gradually slows down like a slot machine
+  }, [pool, rerollsUsed]);
 
-  const shown = results.slice(0, 6);
-  const shownIds = shown.map(g => g.appid).join(',');
-
-  // Genre tags here are purely cosmetic (a badge on the featured pick), so
-  // only fetch for what's actually on screen rather than the whole backlog.
+  // Auto-roll once a pool exists — the first roll is free, doesn't touch the
+  // reroll budget. Keyed on poolMode too, not just pool.length, so switching
+  // modes always re-triggers even if both pools happen to be the same size.
   useEffect(() => {
-    if (shown.length === 0) return;
-    let cancelled = false;
-    const appIds = shown.map(g => g.appid);
+    if (pool.length > 0 && !pick && !spinning && displayGame === null) spin(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poolMode, pool.length]);
 
+  // Switching pools is a different question — starts fresh with its own budget.
+  const handlePoolChange = (mode) => {
+    if (mode === poolMode) return;
+    clearInterval(spinRef.current);
+    setPoolMode(mode);
+    setPick(null);
+    setDisplayGame(null);
+    setSpinning(false);
+    setRerollsUsed(0);
+  };
+
+  useEffect(() => () => clearInterval(spinRef.current), []);
+
+  // Genre tags are cosmetic (a badge on the pick), fetch only once landed.
+  useEffect(() => {
+    if (!pick) return;
+    let cancelled = false;
     const load = async () => {
-      const result = await fetchGenres(appIds);
+      const result = await fetchGenres([pick.appid]);
       if (cancelled) return;
       setGenreData(prev => ({ ...prev, ...result.genres }));
       if (result.pending > 0) {
         pollRef.current = setInterval(async () => {
-          const retry = await fetchGenres(appIds);
+          const retry = await fetchGenres([pick.appid]);
           if (cancelled) return;
           setGenreData(prev => ({ ...prev, ...retry.genres }));
           if (retry.pending === 0) clearInterval(pollRef.current);
@@ -51,15 +98,17 @@ export default function TonightPick() {
     };
     load();
     return () => { cancelled = true; if (pollRef.current) clearInterval(pollRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shownIds]);
+  }, [pick?.appid]);
 
-  if (unplayedGames.length === 0) return null;
+  // Only fully hide when there's genuinely nothing to offer in either pool —
+  // otherwise keep the toggle visible so an empty "Quick" pool doesn't hide
+  // the door to "Anything unplayed", which might still have plenty.
+  if (quickPool.length === 0 && anythingPool.length === 0) return null;
 
-  const pick = shown[0];
-  const alternates = shown.slice(1, 6);
-  const pickGenres = pick ? genreData[pick.appid]?.genres : null;
-  const knownCount = results.filter(g => g.estimateHours != null).length;
+  const shown = pick || displayGame;
+  const genres = pick ? genreData[pick.appid]?.genres : null;
+  const rerollsLeft = REROLL_BUDGET - rerollsUsed;
+  const hoursLogged = shown ? (shown.playtime_forever || 0) / 60 : 0;
 
   return (
     <section>
@@ -68,15 +117,15 @@ export default function TonightPick() {
           Tonight
         </h2>
         <span style={{ height: 1, flex: 1, background: 'var(--border-subtle)' }} />
-        <div style={{ display: 'flex', gap: 6 }}>
-          {BUDGETS.map(b => {
-            const active = maxHours === b.value;
+        <div style={{ display: 'flex', gap: 4 }}>
+          {POOL_MODES.map(m => {
+            const active = poolMode === m.id;
             return (
               <button
-                key={b.label}
-                onClick={() => setMaxHours(b.value)}
+                key={m.id}
+                onClick={() => handlePoolChange(m.id)}
                 style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 11.5, padding: '5px 11px',
+                  fontFamily: 'var(--font-mono)', fontSize: 11, padding: '4px 10px',
                   borderRadius: 'var(--radius-full)', cursor: 'pointer',
                   border: `1px solid ${active ? 'var(--accent-blue)' : 'var(--border-default)'}`,
                   background: active ? 'var(--accent-blue)' : 'transparent',
@@ -84,71 +133,64 @@ export default function TonightPick() {
                   transition: 'all 0.15s ease',
                 }}
               >
-                {b.label}
+                {m.label}
               </button>
             );
           })}
         </div>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text-muted)' }}>
+          {rerollsLeft > 0 ? `${rerollsLeft} reroll${rerollsLeft === 1 ? '' : 's'} left` : 'No rerolls left'}
+        </span>
       </div>
 
-      {shown.length === 0 ? (
-        <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-          {maxHours != null
-            ? 'Nothing in your backlog is confirmed to fit that budget yet — HLTB estimates fill in as you browse Backlog/Completion.'
-            : 'No games match this filter.'}
+      {pool.length === 0 ? (
+        <div className="card" style={{ padding: '32px 24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+          Nothing in this pool right now — try the other mode.
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 20, alignItems: 'start' }}>
-          <article className="card" style={{ borderRadius: 26, overflow: 'hidden' }}>
-            <div style={{ height: 150, background: 'var(--bg-tertiary)', overflow: 'hidden' }}>
-              <GameHeader appId={pick.appid} name={pick.name} />
-            </div>
-            <div style={{ padding: '22px 24px 24px' }}>
+        <article className="card" style={{ borderRadius: 26, overflow: 'hidden' }}>
+          <div style={{ height: 190, background: 'var(--bg-tertiary)', overflow: 'hidden' }}>
+            {shown && (
+              <div style={{ width: '100%', height: '100%', opacity: spinning ? 0.6 : 1, filter: spinning ? 'blur(1.5px)' : 'none', transition: 'opacity 0.1s' }}>
+                <GameHeader appId={shown.appid} name={shown.name} />
+              </div>
+            )}
+          </div>
+          <div style={{ padding: '22px 24px 24px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '1.1px', textTransform: 'uppercase', color: 'var(--accent-blue)', marginBottom: 9 }}>
-                Shortest unplayed pick
+                {spinning ? 'Rolling…' : poolMode === 'quick' ? 'Random pick · under 3h in' : 'Random pick · anything unplayed'}
               </div>
               <h3 style={{ margin: '0 0 8px', fontSize: 21, fontWeight: 600, letterSpacing: '-0.3px' }}>
-                {pick.name}
+                {shown ? shown.name : '—'}
               </h3>
-              {pickGenres?.length > 0 && (
-                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 14 }}>
-                  {pickGenres.slice(0, 3).map(g => (
+              {genres?.length > 0 && (
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                  {genres.slice(0, 3).map(g => (
                     <span key={g} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-full)', background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
                       {g}
                     </span>
                   ))}
                 </div>
               )}
-              <div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, color: 'var(--text-primary)' }}>
-                  {pick.estimateHours != null ? `~${pick.estimateHours}h` : 'Length unknown'}
-                </div>
-                {pick.estimateHours != null && (
-                  <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>main story</div>
-                )}
-              </div>
             </div>
-          </article>
-
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {alternates.map(g => (
-              <div key={g.appid} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 14px', borderRadius: 16 }}>
-                <div style={{ width: 74, height: 35, flexShrink: 0, borderRadius: 8, overflow: 'hidden', background: 'var(--bg-tertiary)' }}>
-                  <GameHeader appId={g.appid} name={g.name} />
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
+              {shown && (
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)' }}>
+                  {hoursLogged > 0 ? `${hoursLogged.toFixed(1)}h logged so far` : 'Never launched'}
                 </div>
-                <span style={{ flex: 1, fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {g.name}
-                </span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--text-muted)', flexShrink: 0 }}>
-                  {g.estimateHours != null ? `~${g.estimateHours}h` : 'unknown'}
-                </span>
-              </div>
-            ))}
-            <div style={{ fontSize: 12.5, color: 'var(--text-muted)', padding: 14 }}>
-              {knownCount} of {unplayedGames.length} unplayed games have a known length.
+              )}
+              <button
+                className="btn btn-primary"
+                onClick={() => spin(true)}
+                disabled={spinning || pool.length < 2 || rerollsLeft === 0}
+                style={{ fontSize: 13 }}
+              >
+                {spinning ? '🎲 Rolling…' : rerollsLeft === 0 ? "That's tonight's pick" : '🎲 Reroll'}
+              </button>
             </div>
           </div>
-        </div>
+        </article>
       )}
     </section>
   );

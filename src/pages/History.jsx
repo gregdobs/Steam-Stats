@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Chart, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler, BarElement, BarController, LineController } from 'chart.js';
 import { useApp } from '../hooks/useAppContext.jsx';
-import { loadSnapshots, formatHours } from '../utils/steam.js';
+import { loadSnapshots, formatHours, computeDayOfWeekPattern } from '../utils/steam.js';
 import { ACCENT_HEX, hexToRgba, PageHeader } from '../components/designSystem.jsx';
 
 Chart.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler, BarElement, BarController, LineController);
@@ -87,6 +87,49 @@ function TrendChart({ trends, theme }) {
   }
 
   return <div style={{ position: 'relative', width: '100%', height: 280 }}><canvas ref={canvasRef} /></div>;
+}
+
+function WeekdayPattern({ pattern }) {
+  if (!pattern) {
+    return (
+      <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+        Needs about two weeks of tracked days before a weekday pattern means anything.
+      </div>
+    );
+  }
+
+  const max = Math.max(...pattern.map(d => d.avgMinutes), 1);
+  const peak = pattern.reduce((a, b) => (b.avgMinutes > a.avgMinutes ? b : a), pattern[0]);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 140 }}>
+        {pattern.map(d => {
+          const barHeight = d.avgMinutes === 0 ? 3 : Math.max(6, Math.round((d.avgMinutes / max) * 140));
+          const isPeak = d.label === peak.label && d.avgMinutes > 0;
+          return (
+            <div
+              key={d.label}
+              title={`${d.label}: ${formatHours(Math.round(d.avgMinutes))} avg over ${d.sampleCount} day${d.sampleCount === 1 ? '' : 's'} tracked`}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', gap: 8 }}
+            >
+              <div style={{
+                width: '100%', maxWidth: 34, borderRadius: 6, height: barHeight,
+                background: isPeak ? 'var(--accent-blue)' : hexToRgba(ACCENT_HEX, d.avgMinutes === 0 ? 0.12 : 0.45),
+                transition: 'height 0.5s ease',
+              }} />
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>{d.label}</span>
+            </div>
+          );
+        })}
+      </div>
+      {peak.avgMinutes > 0 && (
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 16 }}>
+          <span style={{ color: 'var(--accent-blue)', fontWeight: 600 }}>{peak.label}</span> is your heaviest day on average — {formatHours(Math.round(peak.avgMinutes))}.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function PlayHeatmap({ snapshots, ownedGames }) {
@@ -229,53 +272,6 @@ function PlayHeatmap({ snapshots, ownedGames }) {
   );
 }
 
-function SnapshotTimeline({ snapshots }) {
-  if (!snapshots || snapshots.length === 0) {
-    return (
-      <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-        No snapshots yet. Snapshots are saved each time you open the app.
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-      {[...snapshots].reverse().slice(0, 30).map((snap, i) => {
-        const date = new Date(snap.timestamp);
-        const totalMinutes = (snap.games || []).reduce((s, g) => s + (g.playtime_forever || 0), 0);
-
-        return (
-          <div key={i} style={{
-            display: 'flex', gap: 16, padding: '12px 0',
-            borderBottom: '1px solid var(--border-subtle)',
-            alignItems: 'center',
-          }}>
-            <div style={{ width: 110, flexShrink: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                {date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-              </div>
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {(snap.games || []).length} games · {Math.round(totalMinutes / 60).toLocaleString()}h total
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                {(snap.recentGames || []).slice(0, 3).map(g => g.appid).join(', ') || '—'}
-              </div>
-            </div>
-            <div style={{ flexShrink: 0 }}>
-              <span className="badge badge-blue">Snapshot</span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function History() {
   const { historicalTrends, ownedGames, steamId, theme } = useApp();
   const snapshots = steamId ? loadSnapshots(steamId) : [];
@@ -293,6 +289,8 @@ export default function History() {
   const peakWeek = trendHours.length > 0
     ? trendHours.reduce((max, t) => t.hoursPlayed > max.hoursPlayed ? t : max, trendHours[0])
     : null;
+
+  const weekdayPattern = computeDayOfWeekPattern(steamId);
 
   return (
     <div style={{ padding: '56px 24px 96px', maxWidth: 1400, margin: '0 auto' }}>
@@ -334,8 +332,19 @@ export default function History() {
         <TrendChart trends={historicalTrends} theme={theme} />
       </div>
 
-      {/* Heatmap */}
+      {/* Day-of-week pattern */}
       <div className="card" style={{ padding: 24, marginBottom: 20 }}>
+        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, marginBottom: 4, color: 'var(--text-primary)' }}>
+          Day-of-week pattern
+        </h3>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+          Average hours played, by weekday, from your daily snapshot history.
+        </p>
+        <WeekdayPattern pattern={weekdayPattern} />
+      </div>
+
+      {/* Heatmap */}
+      <div className="card" style={{ padding: 24 }}>
         <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, marginBottom: 4, color: 'var(--text-primary)' }}>
           Play activity heatmap
         </h3>
@@ -343,17 +352,6 @@ export default function History() {
           Based on daily snapshot deltas. Darker = more hours played that day.
         </p>
         <PlayHeatmap snapshots={snapshots} ownedGames={ownedGames} />
-      </div>
-
-      {/* Snapshot log */}
-      <div className="card" style={{ padding: 24 }}>
-        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, marginBottom: 4, color: 'var(--text-primary)' }}>
-          Snapshot history
-        </h3>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-          One snapshot saved per day. Your history grows richer over time.
-        </p>
-        <SnapshotTimeline snapshots={snapshots} />
       </div>
     </div>
   );

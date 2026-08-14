@@ -338,25 +338,105 @@ app.get('/api/steam/achievements-batch', async (req, res) => {
         const [playerRes, schemaRes] = results[i].value;
         const playerAchs = playerRes.data?.playerstats?.achievements || [];
         const schemaAchs = schemaRes.data?.game?.availableGameStats?.achievements || [];
-        const earned = playerAchs.filter(a => a.achieved === 1).length;
+        const schemaByName = new Map(schemaAchs.map(s => [s.name, s]));
+        const earnedAchs = playerAchs.filter(a => a.achieved === 1);
         // Most recent unlock timestamp across all earned achievements
-        const lastUnlockTime = playerAchs
-          .filter(a => a.achieved === 1 && a.unlocktime > 0)
+        const lastUnlockTime = earnedAchs
+          .filter(a => a.unlocktime > 0)
           .reduce((max, a) => Math.max(max, a.unlocktime), 0) || null;
+        // Per-achievement detail for earned-only (name/icon/unlock time) — the
+        // schema lookup already happens above for the aggregate count, this
+        // just keeps the per-achievement rows instead of discarding them, so
+        // the Achievement Rarity widget can cross-reference them against
+        // global unlock percentages without a second round of API calls.
+        const earnedDetails = earnedAchs.map(a => {
+          const schema = schemaByName.get(a.apiname);
+          return {
+            apiname: a.apiname,
+            displayName: schema?.displayName || a.apiname,
+            icon: schema?.icon || null,
+            unlocktime: a.unlocktime,
+          };
+        });
         data[appId] = {
-          earned,
+          earned: earnedAchs.length,
           total: schemaAchs.length,
-          pct: schemaAchs.length > 0 ? Math.round((earned / schemaAchs.length) * 100) : null,
+          pct: schemaAchs.length > 0 ? Math.round((earnedAchs.length / schemaAchs.length) * 100) : null,
           lastUnlockTime,
+          earnedDetails,
         };
       } else {
-        data[appId] = { earned: 0, total: 0, pct: null, lastUnlockTime: null };
+        data[appId] = { earned: 0, total: 0, pct: null, lastUnlockTime: null, earnedDetails: [] };
       }
     });
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ─────────────────────────────────────────────
+// ACHIEVEMENT RARITY — global unlock % per achievement, cached to disk.
+// GetGlobalAchievementPercentagesForApp is unauthenticated (no key needed)
+// and defaults to XML output unless format=json is passed explicitly.
+// Cached like genres — percentages drift slowly, so a stale re-fetch window
+// of a month is plenty fresh for a "rarest achievements you own" widget.
+// ─────────────────────────────────────────────
+const RARITY_CACHE_FILE = path.join(__dirname, '.rarity-cache.json');
+let rarityCache = {};
+const RARITY_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function loadRarityCache() {
+  try {
+    if (fs.existsSync(RARITY_CACHE_FILE)) {
+      rarityCache = JSON.parse(fs.readFileSync(RARITY_CACHE_FILE, 'utf8'));
+      console.log(`✅ Achievement rarity cache loaded: ${Object.keys(rarityCache).length} games`);
+    }
+  } catch (err) {
+    console.warn('Rarity cache load failed:', err.message);
+    rarityCache = {};
+  }
+}
+
+function saveRarityCache() {
+  try {
+    fs.writeFileSync(RARITY_CACHE_FILE, JSON.stringify(rarityCache), 'utf8');
+  } catch (err) {
+    console.warn('Rarity cache save failed:', err.message);
+  }
+}
+
+app.post('/api/steam/achievement-rarity', async (req, res) => {
+  const { appIds } = req.body;
+  if (!Array.isArray(appIds)) return res.status(400).json({ error: 'appIds array required' });
+  const ids = appIds.slice(0, 40);
+
+  const missing = ids.filter(id => !rarityCache[id] || (Date.now() - rarityCache[id].fetchedAt) > RARITY_TTL_MS);
+
+  if (missing.length > 0) {
+    await Promise.allSettled(missing.map(async (appId) => {
+      try {
+        const r = await axios.get('https://api.steampowered.com/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/', {
+          params: { gameid: appId, format: 'json' },
+          timeout: 8000,
+        });
+        const achievements = r.data?.achievementpercentages?.achievements || [];
+        const percentages = {};
+        // Steam returns percent as a numeric string (e.g. "49.9") even with
+        // format=json — coerce here so consumers can rely on it being a number.
+        for (const a of achievements) percentages[a.name] = parseFloat(a.percent);
+        rarityCache[appId] = { percentages, fetchedAt: Date.now() };
+      } catch (err) {
+        // Leave uncached on failure (network blip, no global stats for this
+        // app) so it's retried next time rather than permanently empty.
+      }
+    }));
+    saveRarityCache();
+  }
+
+  const result = {};
+  for (const id of ids) result[id] = rarityCache[id]?.percentages || {};
+  res.json({ percentages: result });
 });
 
 // ─────────────────────────────────────────────
@@ -942,6 +1022,8 @@ app.listen(PORT, () => {
   loadHltbState();
   // Restore genre cache
   loadGenreCache();
+  // Restore achievement rarity cache
+  loadRarityCache();
   // Pre-fetch token if not restored from cache
   fetchHltbAuthToken().then(token => {
     if (token) console.log(`✅ HLTB auth token ready`);

@@ -53,6 +53,21 @@ export async function fetchAchievementsBatch(apiKey, steamId, appIds) {
   return await res.json();
 }
 
+export async function fetchAchievementRarity(appIds) {
+  if (!appIds || appIds.length === 0) return {};
+  try {
+    const res = await fetch(`${BASE}/steam/achievement-rarity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appIds }),
+    });
+    const data = await res.json();
+    return data.percentages || {};
+  } catch {
+    return {};
+  }
+}
+
 export async function fetchGenres(appIds) {
   if (!appIds || appIds.length === 0) return { genres: {}, pending: 0, cached: 0 };
   try {
@@ -184,6 +199,25 @@ export function getCompletionStatus(steamHours, hltbHours) {
   if (ratio < 0.9) return { label: 'Getting There', color: 'amber', icon: '🔥' };
   if (ratio < 1.5) return { label: 'Completed', color: 'emerald', icon: '🏁' };
   return { label: 'Overplayer', color: 'violet', icon: '🐙' };
+}
+
+const COMPLETION_LABEL_TO_STATUS_ID = {
+  'Barely Started': 'barely', 'In Progress': 'inprogress', 'Getting There': 'gettingthere',
+  'Completed': 'completed', 'Overplayer': 'overplayer',
+};
+
+// Classifies a game into exactly one of 7 buckets spanning the whole
+// library — the spectrum the Progress page filters on. 'unplayed' is
+// playtime-based alone (no HLTB data needed); 'unmatched' covers games with
+// playtime but no HLTB estimate yet (still fetching, or genuinely no match).
+// Closes the old coverage gap where a game with 1-59 minutes played
+// satisfied neither Backlog's `=== 0` check nor Completion's `> 60` check.
+export function classifyGameStatus(game, hltbData) {
+  const minutes = game.playtime_forever || 0;
+  if (minutes === 0) return 'unplayed';
+  if (!hltbData || hltbData.error || !hltbData.mainStory) return 'unmatched';
+  const status = getCompletionStatus(minutesToHours(minutes), hltbData.mainStory);
+  return status ? COMPLETION_LABEL_TO_STATUS_ID[status.label] : 'unmatched';
 }
 
 // Local data merging
@@ -553,6 +587,100 @@ export function getDailyPlaytimeSeriesForGame(steamId, appid, days) {
 }
 
 // ─────────────────────────────────────────────
+// DAY-OF-WEEK PATTERN
+//
+// Buckets the same daily snapshot deltas used for streak/percentile by
+// weekday instead of by trailing window — "do you play more on weekends"
+// rather than "how does this week compare to past weeks". Needs ~2 weeks of
+// tracked days before every weekday has enough samples for an average to
+// mean anything.
+// ─────────────────────────────────────────────
+const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MIN_TRACKED_DAYS_FOR_WEEKDAY_PATTERN = 14;
+
+export function computeDayOfWeekPattern(steamId) {
+  const days = buildDailyDeltas(steamId ? loadSnapshots(steamId) : []);
+  if (days.length < MIN_TRACKED_DAYS_FOR_WEEKDAY_PATTERN) return null;
+
+  const buckets = Array.from({ length: 7 }, () => ({ totalMinutes: 0, sampleCount: 0 }));
+  for (const d of days) {
+    const jsDay = new Date(d.timestamp).getDay(); // 0=Sun..6=Sat
+    const idx = (jsDay + 6) % 7; // 0=Mon..6=Sun, matching the heatmap's week layout
+    buckets[idx].totalMinutes += d.minutes;
+    buckets[idx].sampleCount += 1;
+  }
+
+  return WEEKDAY_LABELS.map((label, i) => ({
+    label,
+    avgMinutes: buckets[i].sampleCount > 0 ? buckets[i].totalMinutes / buckets[i].sampleCount : 0,
+    sampleCount: buckets[i].sampleCount,
+  }));
+}
+
+// ─────────────────────────────────────────────
+// DESKTOP VS. DECK SPLIT
+//
+// GetOwnedGames already returns a per-platform forever-playtime breakdown
+// on every game (windows/mac/linux/deck) — playtime_deck_forever specifically
+// was fetched but never read anywhere in the app. Framed as a simple ratio
+// against playtime_forever rather than a full platform pie: Deck hours
+// aren't guaranteed to be a clean subtraction from the windows/linux
+// buckets (Proton titles on Deck can report under either), so a "Deck vs.
+// everything else" ratio is the honest claim to make from this data.
+// ─────────────────────────────────────────────
+export function computeDeckSplit(ownedGames) {
+  let deckMinutes = 0;
+  let totalMinutes = 0;
+  for (const g of ownedGames) {
+    deckMinutes += g.playtime_deck_forever || 0;
+    totalMinutes += g.playtime_forever || 0;
+  }
+  if (deckMinutes === 0 || totalMinutes === 0) return null;
+  return {
+    deckMinutes,
+    otherMinutes: totalMinutes - deckMinutes,
+    totalMinutes,
+    deckPct: Math.round((deckMinutes / totalMinutes) * 100),
+  };
+}
+
+// ─────────────────────────────────────────────
+// BACKLOG GRAVEYARD
+//
+// Ranks unplayed games by how long they've shown playtime_forever === 0
+// across snapshot history — the earliest snapshot that already contains a
+// game is the best available signal for "how long has this sat untouched",
+// since Steam's API doesn't expose a purchase date. This is TRACKED time,
+// not owned time: a game bought years ago but only seen since Steam Stats
+// started tracking will show however long that's been, not its true age.
+// ─────────────────────────────────────────────
+export function computeBacklogGraveyard(unplayedGames, steamId) {
+  const snapshots = steamId ? loadSnapshots(steamId) : [];
+  if (snapshots.length === 0) return [];
+
+  const unplayedIds = new Set(unplayedGames.map(g => g.appid));
+  const firstSeen = new Map();
+
+  for (const snap of snapshots) {
+    for (const g of (snap.games || [])) {
+      if (!unplayedIds.has(g.appid)) continue;
+      const existing = firstSeen.get(g.appid);
+      if (existing === undefined || snap.timestamp < existing) {
+        firstSeen.set(g.appid, snap.timestamp);
+      }
+    }
+  }
+
+  return unplayedGames
+    .filter(g => firstSeen.has(g.appid))
+    .map(g => {
+      const timestamp = firstSeen.get(g.appid);
+      return { ...g, firstSeenTimestamp: timestamp, daysTracked: Math.floor((Date.now() - timestamp) / (1000 * 60 * 60 * 24)) };
+    })
+    .sort((a, b) => b.daysTracked - a.daysTracked);
+}
+
+// ─────────────────────────────────────────────
 // PLAY STREAK WITH FORGIVENESS  (§5.2 rebuild)
 //
 // Built with a Duolingo-style "streak freeze" from day one rather than a
@@ -640,53 +768,3 @@ export function computePlayStreak(steamId) {
   };
 }
 
-// ─────────────────────────────────────────────
-// "WHAT SHOULD I PLAY TONIGHT"  (§5.3 rebuild)
-//
-// A lightweight recommender over data already fetched elsewhere — Backlog's
-// unplayed games, the shared HLTB cache, and cached genre tags. Filters by
-// an optional time budget and optional genre; ranks games with a known
-// short-enough HLTB estimate first, unknown-length games after (only when
-// there's no time budget to respect, since an unknown-length game can't be
-// verified to fit a budget).
-//
-// Deliberately fetches nothing new itself — meant to be an instant filter
-// over data the app already has, not another loading state.
-//
-// NOTE: rebuilt from the documented design after a container reset (see
-// PROJECT_STATUS.md §5.3/§7); this one was only "designed, not yet
-// implemented" per the status doc, so there's no lost implementation to
-// reconstruct — this is the first real version.
-// ─────────────────────────────────────────────
-
-export function recommendTonight(unplayedGames, hltbCache = {}, genreData = {}, options = {}) {
-  const { maxHours = null, genre = null } = options;
-
-  let pool = unplayedGames;
-  if (genre) {
-    pool = pool.filter(g => genreData[g.appid]?.genres?.includes(genre));
-  }
-
-  const withEstimate = [];
-  const withoutEstimate = [];
-
-  for (const game of pool) {
-    const hltb = hltbCache[game.name];
-    const hours = (hltb && !hltb.error && hltb.mainStory) ? hltb.mainStory : null;
-
-    if (hours != null) {
-      if (maxHours == null || hours <= maxHours) {
-        withEstimate.push({ ...game, estimateHours: hours });
-      }
-      // else: known length, but too long for the budget — excluded
-    } else {
-      withoutEstimate.push({ ...game, estimateHours: null });
-    }
-  }
-
-  withEstimate.sort((a, b) => a.estimateHours - b.estimateHours);
-
-  // Unknown-length games can't be confirmed to fit a time budget, so only
-  // include them when the user didn't ask for one.
-  return maxHours == null ? [...withEstimate, ...withoutEstimate] : withEstimate;
-}
