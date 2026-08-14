@@ -65,6 +65,12 @@ h1,h2,h3,h4,.heading{font-family:var(--font-display);font-weight:600;line-height
 @keyframes shimmer{0%{background-position:-1000px 0}100%{background-position:1000px 0}}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@keyframes tpReel{0%{transform:translateY(0) scale(1.0)}25%{transform:translateY(-3px) scale(1.015)}50%{transform:translateY(1px) scale(0.99)}75%{transform:translateY(-2px) scale(1.01)}100%{transform:translateY(0) scale(1.0)}}
+@keyframes tpSweep{0%{transform:translateX(-120%) skewX(-12deg)}100%{transform:translateX(220%) skewX(-12deg)}}
+@keyframes tpPop{0%{transform:scale(0.95)}50%{transform:scale(1.025)}100%{transform:scale(1)}}
+@keyframes tpRing{0%{box-shadow:0 0 0 0 var(--accent-blue-dim)}100%{box-shadow:0 0 0 22px rgba(0,0,0,0)}}
+@keyframes tpDice{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+@keyframes tpFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 .animate-fadeIn{animation:fadeIn 0.4s ease both;}
 .animate-fadeInFast{animation:fadeInFast 0.2s ease both;}
 .skeleton{background:linear-gradient(90deg,var(--bg-tertiary) 25%,var(--bg-elevated) 50%,var(--bg-tertiary) 75%);background-size:1000px 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius-sm);}

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
 import { fetchGenres } from '../utils/steam.js';
 import { GameHeader } from './GameImage.jsx';
+import GameDetailPanel from './GameDetailPanel.jsx';
 
 const REROLL_BUDGET = 3;
 const PLAYTIME_CEILING_MINUTES = 180; // < 3 hours
@@ -17,15 +18,19 @@ const POOL_MODES = [
 ];
 
 export default function TonightPick() {
-  const { ownedGames } = useApp();
+  const { ownedGames, hltbCache, getHltbForGame, achCache, getAchievementsForGames } = useApp();
   const [poolMode, setPoolMode] = useState('quick');
   const [genreData, setGenreData] = useState({});
   const [spinning, setSpinning] = useState(false);
   const [displayGame, setDisplayGame] = useState(null);
   const [pick, setPick] = useState(null);
   const [rerollsUsed, setRerollsUsed] = useState(0);
+  const [rollId, setRollId] = useState(0);
+  const [justLanded, setJustLanded] = useState(false);
+  const [detailAnchor, setDetailAnchor] = useState(null);
   const spinRef = useRef(null);
   const pollRef = useRef(null);
+  const landRef = useRef(null);
 
   const quickPool = useMemo(
     () => ownedGames.filter(g => (g.playtime_forever || 0) < PLAYTIME_CEILING_MINUTES),
@@ -40,6 +45,7 @@ export default function TonightPick() {
   const spin = useCallback((isReroll) => {
     if (pool.length === 0) return;
     if (isReroll && rerollsUsed >= REROLL_BUDGET) return;
+    setDetailAnchor(null);
     setSpinning(true);
     setPick(null);
     let ticks = 0;
@@ -53,6 +59,7 @@ export default function TonightPick() {
         clearInterval(spinRef.current);
         setSpinning(false);
         setPick(g);
+        setRollId(id => id + 1);
         if (isReroll) setRerollsUsed(c => c + 1);
       }
     }, 70 + ticks * 4); // gradually slows down like a slot machine
@@ -75,9 +82,22 @@ export default function TonightPick() {
     setDisplayGame(null);
     setSpinning(false);
     setRerollsUsed(0);
+    setDetailAnchor(null);
   };
 
   useEffect(() => () => clearInterval(spinRef.current), []);
+
+  // Brief "landed" flourish (pop + glow ring) each time a pick resolves,
+  // whether that's the first auto-roll or a reroll. Keyed on rollId rather
+  // than the pick object itself, since rolling the same game twice in a row
+  // wouldn't otherwise re-trigger a state change.
+  useEffect(() => {
+    if (rollId === 0) return;
+    setJustLanded(true);
+    clearTimeout(landRef.current);
+    landRef.current = setTimeout(() => setJustLanded(false), 700);
+    return () => clearTimeout(landRef.current);
+  }, [rollId]);
 
   // Genre tags are cosmetic (a badge on the pick), fetch only once landed.
   useEffect(() => {
@@ -99,6 +119,13 @@ export default function TonightPick() {
     load();
     return () => { cancelled = true; if (pollRef.current) clearInterval(pollRef.current); };
   }, [pick?.appid]);
+
+  const openDetail = (e) => {
+    if (spinning || !pick) return;
+    setDetailAnchor(e.currentTarget.getBoundingClientRect());
+    getHltbForGame(pick.name);
+    getAchievementsForGames([pick.appid]);
+  };
 
   // Only fully hide when there's genuinely nothing to offer in either pool —
   // otherwise keep the toggle visible so an empty "Quick" pool doesn't hide
@@ -148,20 +175,75 @@ export default function TonightPick() {
           Nothing in this pool right now — try the other mode.
         </div>
       ) : (
-        <article className="card" style={{ borderRadius: 26, overflow: 'hidden' }}>
-          <div style={{ height: 190, background: 'var(--bg-tertiary)', overflow: 'hidden' }}>
+        <article
+          className="card"
+          onClick={openDetail}
+          title={!spinning && pick ? 'Click for details' : undefined}
+          style={{
+            borderRadius: 26,
+            overflow: 'hidden',
+            cursor: !spinning && pick ? 'pointer' : 'default',
+            animation: justLanded ? 'tpPop 0.5s cubic-bezier(.34,1.56,.64,1), tpRing 0.7s ease-out' : 'none',
+          }}
+        >
+          <div style={{ height: 'clamp(200px, 28vw, 280px)', background: 'var(--bg-tertiary)', position: 'relative', overflow: 'hidden' }}>
             {shown && (
-              <div style={{ width: '100%', height: '100%', opacity: spinning ? 0.6 : 1, filter: spinning ? 'blur(1.5px)' : 'none', transition: 'opacity 0.1s' }}>
+              <div
+                style={{
+                  width: '100%', height: '100%',
+                  filter: spinning ? 'blur(2px) saturate(1.15)' : 'none',
+                  transition: 'filter 0.15s',
+                  animation: spinning ? 'tpReel 0.22s ease-in-out infinite' : 'none',
+                }}
+              >
                 <GameHeader appId={shown.appid} name={shown.name} />
               </div>
             )}
+            {spinning && (
+              <div
+                aria-hidden="true"
+                style={{
+                  position: 'absolute', top: 0, bottom: 0, left: 0, width: '45%',
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
+                  animation: 'tpSweep 0.9s linear infinite',
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+            {!spinning && pick && (
+              <div style={{
+                position: 'absolute', inset: 0,
+                background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 45%)',
+                pointerEvents: 'none',
+              }} />
+            )}
+            {!spinning && pick && (
+              <div style={{
+                position: 'absolute', top: 12, right: 14,
+                fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700,
+                letterSpacing: '0.4px', color: '#fffdfa',
+                background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.25)',
+                borderRadius: 'var(--radius-full)', padding: '4px 10px',
+                display: 'flex', alignItems: 'center', gap: 5,
+                animation: justLanded ? 'fadeInFast 0.4s ease 0.15s both' : 'none',
+                pointerEvents: 'none',
+              }}>
+                🎯 Click for details
+              </div>
+            )}
           </div>
-          <div style={{ padding: '22px 24px 24px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+          <div style={{ padding: '24px 26px 26px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '1.1px', textTransform: 'uppercase', color: 'var(--accent-blue)', marginBottom: 9 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '1.1px', textTransform: 'uppercase', color: 'var(--accent-blue)', marginBottom: 9, display: 'flex', alignItems: 'center', gap: 7 }}>
+                {spinning && (
+                  <span style={{ display: 'inline-block', animation: 'tpDice 0.5s linear infinite' }}>🎲</span>
+                )}
                 {spinning ? 'Rolling…' : poolMode === 'quick' ? 'Random pick · under 3h in' : 'Random pick · anything unplayed'}
               </div>
-              <h3 style={{ margin: '0 0 8px', fontSize: 21, fontWeight: 600, letterSpacing: '-0.3px' }}>
+              <h3 style={{
+                margin: '0 0 8px', fontSize: 'clamp(21px, 2.4vw, 28px)', fontWeight: 600, letterSpacing: '-0.4px',
+                animation: justLanded ? 'fadeInFast 0.35s ease' : 'none',
+              }}>
                 {shown ? shown.name : '—'}
               </h3>
               {genres?.length > 0 && (
@@ -182,15 +264,25 @@ export default function TonightPick() {
               )}
               <button
                 className="btn btn-primary"
-                onClick={() => spin(true)}
+                onClick={e => { e.stopPropagation(); spin(true); }}
                 disabled={spinning || pool.length < 2 || rerollsLeft === 0}
-                style={{ fontSize: 13 }}
+                style={{ fontSize: 13, animation: spinning ? 'tpFloat 0.6s ease-in-out infinite' : 'none' }}
               >
                 {spinning ? '🎲 Rolling…' : rerollsLeft === 0 ? "That's tonight's pick" : '🎲 Reroll'}
               </button>
             </div>
           </div>
         </article>
+      )}
+
+      {detailAnchor && pick && (
+        <GameDetailPanel
+          game={pick}
+          achData={achCache[pick.appid]}
+          hltbData={hltbCache[pick.name]}
+          anchorRect={detailAnchor}
+          onClose={() => setDetailAnchor(null)}
+        />
       )}
     </section>
   );
