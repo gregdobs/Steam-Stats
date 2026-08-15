@@ -27,7 +27,7 @@ export default function TonightPick() {
   const [rerollsUsed, setRerollsUsed] = useState(0);
   const [rollId, setRollId] = useState(0);
   const [justLanded, setJustLanded] = useState(false);
-  const [detailAnchor, setDetailAnchor] = useState(null);
+  const [showDetail, setShowDetail] = useState(false);
   const spinRef = useRef(null);
   const pollRef = useRef(null);
   const landRef = useRef(null);
@@ -45,7 +45,7 @@ export default function TonightPick() {
   const spin = useCallback((isReroll) => {
     if (pool.length === 0) return;
     if (isReroll && rerollsUsed >= REROLL_BUDGET) return;
-    setDetailAnchor(null);
+    setShowDetail(false);
     setSpinning(true);
     setPick(null);
     let ticks = 0;
@@ -82,7 +82,7 @@ export default function TonightPick() {
     setDisplayGame(null);
     setSpinning(false);
     setRerollsUsed(0);
-    setDetailAnchor(null);
+    setShowDetail(false);
   };
 
   useEffect(() => () => clearInterval(spinRef.current), []);
@@ -120,9 +120,9 @@ export default function TonightPick() {
     return () => { cancelled = true; if (pollRef.current) clearInterval(pollRef.current); };
   }, [pick?.appid]);
 
-  const openDetail = (e) => {
+  const openDetail = () => {
     if (spinning || !pick) return;
-    setDetailAnchor(e.currentTarget.getBoundingClientRect());
+    setShowDetail(true);
     getHltbForGame(pick.name);
     getAchievementsForGames([pick.appid]);
   };
@@ -140,10 +140,10 @@ export default function TonightPick() {
   return (
     <section>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0, fontSize: 13, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        <h2 style={{ margin: 0, fontSize: 13, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', color: 'var(--ss-ink3)' }}>
           Tonight
         </h2>
-        <span style={{ height: 1, flex: 1, background: 'var(--border-subtle)' }} />
+        <span style={{ height: 1, flex: 1, background: 'var(--ss-line-soft)' }} />
         <div style={{ display: 'flex', gap: 4 }}>
           {POOL_MODES.map(m => {
             const active = poolMode === m.id;
@@ -152,11 +152,11 @@ export default function TonightPick() {
                 key={m.id}
                 onClick={() => handlePoolChange(m.id)}
                 style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 11, padding: '4px 10px',
-                  borderRadius: 'var(--radius-full)', cursor: 'pointer',
-                  border: `1px solid ${active ? 'var(--accent-blue)' : 'var(--border-default)'}`,
-                  background: active ? 'var(--accent-blue)' : 'transparent',
-                  color: active ? '#fffdfa' : 'var(--text-secondary)',
+                  fontSize: 11, padding: '4px 10px',
+                  borderRadius: 99, cursor: 'pointer',
+                  border: `1px solid ${active ? 'var(--ss-accent)' : 'var(--ss-line)'}`,
+                  background: active ? 'var(--ss-accent)' : 'transparent',
+                  color: active ? '#fff' : 'var(--ss-ink2)',
                   transition: 'all 0.15s ease',
                 }}
               >
@@ -165,28 +165,29 @@ export default function TonightPick() {
             );
           })}
         </div>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text-muted)' }}>
+        <span style={{ fontSize: 11.5, color: 'var(--ss-ink3)' }}>
           {rerollsLeft > 0 ? `${rerollsLeft} reroll${rerollsLeft === 1 ? '' : 's'} left` : 'No rerolls left'}
         </span>
       </div>
 
       {pool.length === 0 ? (
-        <div className="card" style={{ padding: '32px 24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+        <div className="ss-panel" style={{ padding: '32px 24px', textAlign: 'center', color: 'var(--ss-ink3)', fontSize: 13 }}>
           Nothing in this pool right now — try the other mode.
         </div>
       ) : (
         <article
-          className="card"
+          className="ss-panel"
           onClick={openDetail}
           title={!spinning && pick ? 'Click for details' : undefined}
           style={{
+            padding: 0,
             borderRadius: 26,
             overflow: 'hidden',
             cursor: !spinning && pick ? 'pointer' : 'default',
             animation: justLanded ? 'tpPop 0.5s cubic-bezier(.34,1.56,.64,1), tpRing 0.7s ease-out' : 'none',
           }}
         >
-          <div style={{ height: 'clamp(200px, 28vw, 280px)', background: 'var(--bg-tertiary)', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ height: 'clamp(200px, 28vw, 280px)', background: 'var(--ss-inset)', position: 'relative', overflow: 'hidden' }}>
             {shown && (
               <div
                 style={{
@@ -220,10 +221,10 @@ export default function TonightPick() {
             {!spinning && pick && (
               <div style={{
                 position: 'absolute', top: 12, right: 14,
-                fontFamily: 'var(--font-mono)', fontSize: 10.5, fontWeight: 700,
-                letterSpacing: '0.4px', color: '#fffdfa',
+                fontSize: 10.5, fontWeight: 700,
+                letterSpacing: '0.4px', color: '#fff',
                 background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.25)',
-                borderRadius: 'var(--radius-full)', padding: '4px 10px',
+                borderRadius: 99, padding: '4px 10px',
                 display: 'flex', alignItems: 'center', gap: 5,
                 animation: justLanded ? 'fadeInFast 0.4s ease 0.15s both' : 'none',
                 pointerEvents: 'none',
@@ -234,7 +235,7 @@ export default function TonightPick() {
           </div>
           <div style={{ padding: '24px 26px 26px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '1.1px', textTransform: 'uppercase', color: 'var(--accent-blue)', marginBottom: 9, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ fontSize: 10.5, letterSpacing: '1.1px', textTransform: 'uppercase', color: 'var(--ss-accent)', marginBottom: 9, display: 'flex', alignItems: 'center', gap: 7 }}>
                 {spinning && (
                   <span style={{ display: 'inline-block', animation: 'tpDice 0.5s linear infinite' }}>🎲</span>
                 )}
@@ -249,7 +250,7 @@ export default function TonightPick() {
               {genres?.length > 0 && (
                 <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                   {genres.slice(0, 3).map(g => (
-                    <span key={g} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-full)', background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                    <span key={g} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'var(--ss-btn)', color: 'var(--ss-ink3)' }}>
                       {g}
                     </span>
                   ))}
@@ -258,15 +259,19 @@ export default function TonightPick() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
               {shown && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: 13, color: 'var(--ss-ink3)' }}>
                   {hoursLogged > 0 ? `${hoursLogged.toFixed(1)}h logged so far` : 'Never launched'}
                 </div>
               )}
               <button
-                className="btn btn-primary"
                 onClick={e => { e.stopPropagation(); spin(true); }}
                 disabled={spinning || pool.length < 2 || rerollsLeft === 0}
-                style={{ fontSize: 13, animation: spinning ? 'tpFloat 0.6s ease-in-out infinite' : 'none' }}
+                style={{
+                  fontSize: 13, fontWeight: 500, padding: '8px 18px', borderRadius: 12,
+                  border: 'none', cursor: 'pointer', color: '#fff', background: 'var(--ss-accent)',
+                  opacity: (spinning || pool.length < 2 || rerollsLeft === 0) ? 0.5 : 1,
+                  animation: spinning ? 'tpFloat 0.6s ease-in-out infinite' : 'none',
+                }}
               >
                 {spinning ? '🎲 Rolling…' : rerollsLeft === 0 ? "That's tonight's pick" : '🎲 Reroll'}
               </button>
@@ -275,13 +280,12 @@ export default function TonightPick() {
         </article>
       )}
 
-      {detailAnchor && pick && (
+      {showDetail && pick && (
         <GameDetailPanel
           game={pick}
           achData={achCache[pick.appid]}
           hltbData={hltbCache[pick.name]}
-          anchorRect={detailAnchor}
-          onClose={() => setDetailAnchor(null)}
+          onClose={() => setShowDetail(false)}
         />
       )}
     </section>

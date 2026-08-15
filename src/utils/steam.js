@@ -425,6 +425,47 @@ export function computeBacklogMomentum(ownedGames, steamId) {
   return { delta, days: Math.round((newest.timestamp - oldest.timestamp) / (1000 * 60 * 60 * 24)) };
 }
 
+// Zero-filled trailing daily unplayed-game-count series (today inclusive),
+// for the backlog momentum sparkline. Mirrors getDailyPlaytimeSeries's
+// day-walking shape but reads each day's nearest-prior snapshot directly
+// (a count, not a delta between two snapshots). Follows the "silent until
+// meaningful" convention — returns [] below 2 snapshots rather than a
+// single-point chart. A day with no snapshot yet at all gets `count: null`
+// (no data), distinct from a day where the backlog was genuinely 0.
+export function getUnplayedCountSeries(steamId, days) {
+  const snapshots = steamId ? loadSnapshots(steamId) : [];
+  if (snapshots.length < 2) return [];
+
+  const series = [];
+  const cursor = toMidnight(Date.now());
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(cursor);
+    d.setDate(d.getDate() - i);
+    const dayEnd = d.getTime() + 24 * 60 * 60 * 1000;
+
+    let snap = null;
+    for (const s of snapshots) {
+      if (s.timestamp <= dayEnd) snap = s;
+      else break;
+    }
+    const count = snap ? (snap.games || []).filter(g => !g.playtime_forever).length : null;
+    series.push({ date: d.toDateString(), timestamp: d.getTime(), count });
+  }
+  return series;
+}
+
+// Games that have been played at some point but have gone quiet the
+// longest, ranked by days since rtime_last_played (a live Steam API field,
+// unbounded — unlike computeBacklogGraveyard below, this needs no local
+// snapshot history to produce a result for a brand-new install).
+export function computeDormantLongest(ownedGames) {
+  const now = Date.now() / 1000;
+  return ownedGames
+    .filter(g => g.playtime_forever > 0 && g.rtime_last_played)
+    .map(g => ({ ...g, daysSinceLastPlayed: Math.floor((now - g.rtime_last_played) / 86400) }))
+    .sort((a, b) => b.daysSinceLastPlayed - a.daysSinceLastPlayed);
+}
+
 // Breaks down the unplayed backlog by genre, using the same genre cache
 // GenreAllocation uses. Returns sorted [genre, count] pairs.
 export function computeBacklogByGenre(unplayedGames, genreData) {
@@ -615,6 +656,134 @@ export function computeDayOfWeekPattern(steamId) {
     avgMinutes: buckets[i].sampleCount > 0 ? buckets[i].totalMinutes / buckets[i].sampleCount : 0,
     sampleCount: buckets[i].sampleCount,
   }));
+}
+
+// ─────────────────────────────────────────────
+// RECENCY BUCKETING
+//
+// Shared by History's "last touched each game" chart and Library's
+// "recency lanes" — both group games by how long since they were last
+// played. Reads rtime_last_played (Steam API, unbounded — not limited by
+// local snapshot retention) with a fallback to the local-install last-played
+// timestamp. Returns null for games that have never been played.
+// ─────────────────────────────────────────────
+export function daysSincePlayed(game) {
+  const ts = game.rtime_last_played || game.localLastPlayed;
+  if (!ts) return null;
+  return Math.floor((Date.now() / 1000 - ts) / 86400);
+}
+
+export const RECENCY_BUCKETS = [
+  { id: 'week',    label: 'This week',   maxDays: 7 },
+  { id: 'month',   label: 'This month',  maxDays: 30 },
+  { id: 'quarter', label: '3 months',    maxDays: 90 },
+  { id: 'year',    label: 'This year',   maxDays: 365 },
+  { id: 'stale',   label: 'Over a year', maxDays: Infinity },
+];
+
+export function recencyBucket(days) {
+  if (days == null) return null;
+  return RECENCY_BUCKETS.find(b => days <= b.maxDays)?.id ?? 'stale';
+}
+
+// ─────────────────────────────────────────────
+// ACHIEVEMENT UNLOCK TIMELINE
+//
+// Steam timestamps every achievement unlock (unlocktime, from
+// GetPlayerAchievements) — a real history independent of local snapshot
+// retention, unlike playtime deltas which only cover the last 90 days this
+// app has been running. Both functions read achCache's earnedDetails
+// (populated by getAchievementsForGames) rather than re-fetching anything.
+// ─────────────────────────────────────────────
+export function computeMonthlyUnlocks(achCache, ownedGames) {
+  const nameByAppId = new Map(ownedGames.map(g => [String(g.appid), g.name]));
+  const byMonth = new Map(); // 'YYYY-MM' -> Map<appid, count>
+
+  for (const [appid, data] of Object.entries(achCache || {})) {
+    for (const a of (data?.earnedDetails || [])) {
+      if (!a.unlocktime) continue;
+      const key = new Date(a.unlocktime * 1000).toISOString().slice(0, 7);
+      if (!byMonth.has(key)) byMonth.set(key, new Map());
+      const gameMap = byMonth.get(key);
+      gameMap.set(appid, (gameMap.get(appid) || 0) + 1);
+    }
+  }
+
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, gameMap]) => ({
+      month,
+      count: [...gameMap.values()].reduce((s, n) => s + n, 0),
+      games: [...gameMap.entries()]
+        .map(([appid, count]) => ({ appid, name: nameByAppId.get(appid) || `App ${appid}`, count }))
+        .sort((a, b) => b.count - a.count),
+    }));
+}
+
+// Segments are relative to the same 3 globally-top games in every year (not
+// each year's own top 3) so the legend stays consistent across the whole
+// chart instead of relabeling itself year to year.
+export function computeYearlyUnlocks(achCache, ownedGames) {
+  const nameByAppId = new Map(ownedGames.map(g => [String(g.appid), g.name]));
+  const byYear = new Map(); // year (number) -> Map<appid, count>
+  const globalTotals = new Map(); // appid -> count across all years
+
+  for (const [appid, data] of Object.entries(achCache || {})) {
+    for (const a of (data?.earnedDetails || [])) {
+      if (!a.unlocktime) continue;
+      const year = new Date(a.unlocktime * 1000).getUTCFullYear();
+      if (!byYear.has(year)) byYear.set(year, new Map());
+      byYear.get(year).set(appid, (byYear.get(year).get(appid) || 0) + 1);
+      globalTotals.set(appid, (globalTotals.get(appid) || 0) + 1);
+    }
+  }
+
+  const topAppIds = [...globalTotals.entries()]
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3)
+    .map(([appid]) => appid);
+
+  return [...byYear.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([year, gameMap]) => {
+      const total = [...gameMap.values()].reduce((s, n) => s + n, 0);
+      const topSegments = topAppIds.map(appid => {
+        const count = gameMap.get(appid) || 0;
+        return { appid, name: nameByAppId.get(appid) || `App ${appid}`, count, pct: total > 0 ? count / total : 0 };
+      });
+      const otherCount = total - topSegments.reduce((s, t) => s + t.count, 0);
+      const segments = [...topSegments, { name: 'Everything else', count: otherCount, pct: total > 0 ? otherCount / total : 0 }]
+        .filter(s => s.count > 0);
+      return { year, count: total, gameCount: gameMap.size, segments };
+    });
+}
+
+// ─────────────────────────────────────────────
+// LIBRARY DERIVED STATS
+//
+// Three small facts about the shape of a library that aren't derivable at a
+// glance from the raw game list: how concentrated the hours are, and how far
+// off "half the library played" actually is.
+// ─────────────────────────────────────────────
+export function computeLibraryDerivedStats(ownedGames) {
+  const played = ownedGames.filter(g => g.playtime_forever > 0);
+  const hours = played.map(g => g.playtime_forever / 60).sort((a, b) => a - b);
+  const medianHours = hours.length === 0 ? 0
+    : hours.length % 2 === 1 ? hours[(hours.length - 1) / 2]
+    : (hours[hours.length / 2 - 1] + hours[hours.length / 2]) / 2;
+
+  const totalHours = played.reduce((s, g) => s + g.playtime_forever, 0) / 60;
+  const top10Hours = [...played]
+    .sort((a, b) => b.playtime_forever - a.playtime_forever)
+    .slice(0, 10)
+    .reduce((s, g) => s + g.playtime_forever, 0) / 60;
+  const top10Pct = totalHours > 0 ? Math.round((top10Hours / totalHours) * 100) : 0;
+
+  // How many more never-played games would need launching to get half the
+  // OWNED library played — 0 once already at or past that mark.
+  const gamesToHit50PctPlayed = Math.max(0, Math.ceil(ownedGames.length * 0.5) - played.length);
+
+  return { medianHours, top10Pct, gamesToHit50PctPlayed };
 }
 
 // ─────────────────────────────────────────────

@@ -9,7 +9,7 @@ import { GameCapsule } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
 import TonightPick from '../components/TonightPick.jsx';
 import { ALL_TIME_PERIODS, loadFeatureFlags, SourceBadge } from '../components/Navbar.jsx';
-import { ACCENT_HEX, hexToRgba, tint, SectionHeading, StatCell } from '../components/designSystem.jsx';
+import { chartRgba, tint, SectionHeading, StatCell, CrossFilterBanner } from '../components/designSystem.jsx';
 
 const PERIOD_META = {
   '7days':   { days: 7,    phrase: 'in the last 7 days',      shortLabel: '7 days',   shareLabel: 'the last 7 days' },
@@ -44,8 +44,8 @@ function BarStrip({ series, height = 96, highlightRecent = false, leftLabel, rig
         {series.map((d, i) => {
           const barHeight = d.minutes === 0 ? 3 : Math.max(6, Math.round((d.minutes / max) * height));
           const fill = d.minutes === 0
-            ? 'var(--border-default)'
-            : (highlightRecent && i >= highlightFrom) ? 'var(--accent-blue)' : hexToRgba(ACCENT_HEX, 0.45);
+            ? 'var(--ss-track)'
+            : (highlightRecent && i >= highlightFrom) ? 'var(--ss-chart-hi)' : chartRgba(0.45);
           return (
             <div key={d.date} title={d.minutes === 0 ? 'No play' : formatHours(d.minutes)} style={{
               flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%',
@@ -55,7 +55,7 @@ function BarStrip({ series, height = 96, highlightRecent = false, leftLabel, rig
           );
         })}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--text-muted)', letterSpacing: '0.6px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, fontSize: 10.5, color: 'var(--ss-ink3)', letterSpacing: '0.6px' }}>
         <span>{leftLabel ?? formatDayLabel(series[0].timestamp)}</span>
         <span>{rightLabel ?? 'TODAY'}</span>
       </div>
@@ -70,11 +70,7 @@ function BarStrip({ series, height = 96, highlightRecent = false, leftLabel, rig
 function PeriodToggle({ enabledPeriods, timePeriod, setTimePeriod, hoveredPeriod, setHoveredPeriod }) {
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
-      <div style={{
-        display: 'flex', gap: 2, padding: 3,
-        background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-full)',
-        border: '1px solid var(--border-subtle)',
-      }}>
+      <div style={{ display: 'flex', gap: 2, padding: 3, background: 'var(--ss-inset)', borderRadius: 99, border: '1px solid var(--ss-line)' }}>
         {enabledPeriods.map(p => {
           const isActive = timePeriod === p.id;
           return (
@@ -85,14 +81,11 @@ function PeriodToggle({ enabledPeriods, timePeriod, setTimePeriod, hoveredPeriod
               onMouseLeave={() => setHoveredPeriod(null)}
               title={p.tooltip}
               style={{
-                background: isActive ? 'var(--bg-secondary)' : 'transparent',
-                border: isActive ? '1px solid var(--border-default)' : '1px solid transparent',
-                borderRadius: 'var(--radius-full)',
-                padding: '4px 11px',
-                cursor: 'pointer',
-                color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
-                fontFamily: 'var(--font-mono)', transition: 'all 0.15s ease',
-                boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
+                background: isActive ? 'var(--ss-btn-hi)' : 'transparent',
+                border: isActive ? '1px solid var(--ss-line)' : '1px solid transparent',
+                borderRadius: 99, padding: '4px 11px', cursor: 'pointer',
+                color: isActive ? 'var(--ss-ink)' : 'var(--ss-ink3)',
+                transition: 'all 0.15s ease',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
               }}
             >
@@ -108,12 +101,13 @@ function PeriodToggle({ enabledPeriods, timePeriod, setTimePeriod, hoveredPeriod
         return (
           <div style={{
             position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-            background: 'var(--text-primary)', color: 'var(--text-inverse)',
-            padding: '6px 10px', borderRadius: 'var(--radius-sm)',
+            background: 'var(--ss-sheet)', color: 'var(--ss-ink)',
+            border: '1px solid var(--ss-line)',
+            padding: '6px 10px', borderRadius: 10,
             fontSize: 11, whiteSpace: 'nowrap', zIndex: 200,
-            pointerEvents: 'none', animation: 'fadeInFast 0.1s ease',
+            pointerEvents: 'none', animation: 'ssFade 0.1s ease',
           }}>
-            <span style={{ fontWeight: 700 }}>{p?.label}</span>{' — '}
+            <span style={{ fontWeight: 600 }}>{p?.label}</span>{' — '}
             <span style={{ opacity: 0.8 }}>{p?.tooltip}</span>
           </div>
         );
@@ -122,7 +116,37 @@ function PeriodToggle({ enabledPeriods, timePeriod, setTimePeriod, hoveredPeriod
   );
 }
 
-function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId, periodToggleProps }) {
+// Small clickable capsule for a game in the current period — sets the
+// cross-filter shared with the "Recent vs. lifetime" panel below.
+function HeroCapsule({ game, timePeriod, active, dimmed, onToggle }) {
+  const periodMinutes = getPeriodMinutes(game, timePeriod);
+  const allTimeMinutes = game.playtime_forever || 0;
+  const pct = allTimeMinutes > 0 ? Math.min(Math.round((periodMinutes / allTimeMinutes) * 100), 100) : 0;
+  return (
+    <button
+      onClick={onToggle}
+      title={game.name}
+      style={{
+        width: 78, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6,
+        background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left',
+        opacity: dimmed ? 0.4 : 1, transition: 'opacity 0.15s',
+      }}
+    >
+      <div style={{
+        width: 78, height: 117, borderRadius: 12, overflow: 'hidden', background: 'var(--ss-inset)',
+        border: active ? '2px solid var(--ss-accent)' : '1px solid var(--ss-line)',
+      }}>
+        <GameCapsule appId={game.appid} name={game.name} />
+      </div>
+      <div style={{ fontSize: 11, color: active ? 'var(--ss-accent-txt)' : 'var(--ss-ink2)', fontWeight: 500 }}>{formatHours(periodMinutes)}</div>
+      <div style={{ height: 3, borderRadius: 99, background: 'var(--ss-track)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: 'var(--ss-chart-grad)' }} />
+      </div>
+    </button>
+  );
+}
+
+function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId, periodToggleProps, activeFilter, onToggleFilter }) {
   const meta = PERIOD_META[timePeriod];
   const streak = steamId ? computePlayStreak(steamId) : null;
   const windowPct = (steamId && meta.days) ? computeWindowPercentile(steamId, meta.days) : null;
@@ -145,13 +169,13 @@ function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId, per
     }}>
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: 11, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ss-ink3)' }}>
             {PERIOD_EYEBROW[timePeriod]}
           </span>
-          <span style={{ height: 1, flex: 1, background: 'var(--border-default)' }} />
+          <span style={{ height: 1, flex: 1, background: 'var(--ss-line)' }} />
           <PeriodToggle {...periodToggleProps} timePeriod={timePeriod} />
         </div>
-        <h1 style={{ margin: 0, fontSize: 'clamp(26px, 3.2vw, 40px)', lineHeight: 1.22, fontWeight: 400, letterSpacing: '-0.9px', color: 'var(--text-primary)' }}>
+        <h1 style={{ margin: 0, fontSize: 'clamp(26px, 3.2vw, 40px)', lineHeight: 1.22, fontWeight: 300, letterSpacing: '-0.9px', color: 'var(--ss-ink)' }}>
           <span style={{ fontWeight: 600 }}>{hoursLabel} hours</span>
           {` across ${gameCount} game${gameCount === 1 ? '' : 's'} ${meta.phrase}`}
           {windowPct?.percentile >= 75 && ' — a heavier stretch than usual'}
@@ -160,14 +184,61 @@ function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId, per
           {'.'}
         </h1>
         {hasSubtext && (
-          <p style={{ margin: '20px 0 0', fontSize: 15, lineHeight: 1.65, color: 'var(--text-secondary)', maxWidth: '52ch' }}>
-            {windowPct?.percentile >= 75 && <>That puts this stretch in the <span style={{ color: 'var(--accent-blue)' }}>{lowerFirst(windowPct.label)}</span>. </>}
+          <p style={{ margin: '20px 0 0', fontSize: 15, lineHeight: 1.65, color: 'var(--ss-ink2)', maxWidth: '52ch' }}>
+            {windowPct?.percentile >= 75 && <>That puts this stretch in the <span style={{ color: 'var(--ss-accent)' }}>{lowerFirst(windowPct.label)}</span>. </>}
             {windowPct?.percentile != null && windowPct.percentile <= 10 && <>{windowPct.label}. </>}
             {streak && streak.currentStreak > 0 && `${streak.currentStreak} day${streak.currentStreak === 1 ? '' : 's'} running, with today still open.`}
           </p>
         )}
+        {gameCount > 1 && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 24, overflowX: 'auto', paddingBottom: 2 }}>
+            {periodGames.slice(0, 6).map(g => (
+              <HeroCapsule
+                key={g.appid} game={g} timePeriod={timePeriod}
+                active={activeFilter === g.appid}
+                dimmed={activeFilter != null && activeFilter !== g.appid}
+                onToggle={() => onToggleFilter(g.appid)}
+              />
+            ))}
+          </div>
+        )}
       </div>
       {series.length > 0 && <BarStrip series={series} highlightRecent />}
+    </section>
+  );
+}
+
+// Ghost bar = lifetime hours (scaled to the widest lifetime shown), bright
+// bar overlaid = this period's hours on the same scale — shares the
+// activeFilter state set by the hero capsules above.
+function RecentVsLifetime({ periodGames, timePeriod, activeFilter, onToggleFilter }) {
+  if (periodGames.length < 2) return null;
+  const shown = periodGames.slice(0, 8);
+  const maxLifetime = Math.max(...shown.map(g => g.playtime_forever || 0), 1);
+
+  return (
+    <section className="ss-panel">
+      <SectionHeading title="Recent vs. lifetime" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {shown.map(g => {
+          const periodMinutes = getPeriodMinutes(g, timePeriod);
+          const allTimeMinutes = g.playtime_forever || 0;
+          const active = activeFilter === g.appid;
+          const dimmed = activeFilter != null && !active;
+          return (
+            <div key={g.appid} onClick={() => onToggleFilter(g.appid)} style={{ cursor: 'pointer', opacity: dimmed ? 0.4 : 1, transition: 'opacity 0.15s' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, gap: 10 }}>
+                <span style={{ fontSize: 13, color: active ? 'var(--ss-accent-txt)' : 'var(--ss-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</span>
+                <span style={{ fontSize: 12, color: 'var(--ss-ink3)', flexShrink: 0 }}>{formatHours(periodMinutes)} / {formatHours(allTimeMinutes)}</span>
+              </div>
+              <div style={{ position: 'relative', height: 8, borderRadius: 99, background: 'var(--ss-track)', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', inset: 0, width: `${Math.min((allTimeMinutes / maxLifetime) * 100, 100)}%`, background: chartRgba(0.22), borderRadius: 99 }} />
+                <div style={{ position: 'absolute', inset: 0, width: `${Math.min((periodMinutes / maxLifetime) * 100, 100)}%`, background: active ? 'var(--ss-chart-hi)' : 'var(--ss-chart-fill)', borderRadius: 99, transition: 'width 0.4s ease' }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -184,16 +255,16 @@ function FocusCard({ game, timePeriod, periodMinutes, totalPeriodMinutes, steamI
   const columns = (timePeriod === 'alltime' ? 1 : 2) + (avgSessionHours != null ? 1 : 0);
 
   return (
-    <article className="card" onClick={onClick} style={{ padding: 26, display: 'flex', gap: 26, cursor: 'pointer' }}>
-      <div style={{ width: 132, height: 198, flexShrink: 0, alignSelf: 'flex-start', borderRadius: 18, overflow: 'hidden', background: 'var(--bg-tertiary)' }}>
+    <article className="ss-panel" onClick={onClick} style={{ padding: 26, display: 'flex', gap: 26, cursor: 'pointer' }}>
+      <div style={{ width: 132, height: 198, flexShrink: 0, alignSelf: 'flex-start', borderRadius: 18, overflow: 'hidden', background: 'var(--ss-inset)' }}>
         <GameCapsule appId={game.appid} name={game.name} />
       </div>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div>
-          <h3 style={{ margin: '0 0 6px', fontSize: 25, fontWeight: 600, letterSpacing: '-0.5px', lineHeight: 1.2 }}>
+          <h3 style={{ margin: '0 0 6px', fontSize: 25, fontWeight: 600, letterSpacing: '-0.5px', lineHeight: 1.2, color: 'var(--ss-ink)' }}>
             {game.name}
           </h3>
-          <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-secondary)' }}>
+          <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ss-ink2)' }}>
             {lastPlayed && `Played ${formatLastPlayed(lastPlayed)}`}
             {game.launchCount ? `${lastPlayed ? ' · ' : ''}${game.launchCount} session${game.launchCount === 1 ? '' : 's'} all time` : ''}
           </p>
@@ -201,7 +272,7 @@ function FocusCard({ game, timePeriod, periodMinutes, totalPeriodMinutes, steamI
 
         <div style={{
           display: 'grid', gridTemplateColumns: `repeat(${columns},minmax(0,1fr))`,
-          borderTop: '1px solid var(--border-default)', borderBottom: '1px solid var(--border-default)',
+          borderTop: '1px solid var(--ss-line)', borderBottom: '1px solid var(--ss-line)',
         }}>
           {timePeriod !== 'alltime' && <StatCell label={meta.shortLabel} value={formatHours(periodMinutes)} first />}
           <StatCell label="All time" value={formatHours(allTimeMinutes)} first={timePeriod === 'alltime'} />
@@ -210,12 +281,12 @@ function FocusCard({ game, timePeriod, periodMinutes, totalPeriodMinutes, steamI
 
         {meta.shareLabel && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--ss-ink2)', marginBottom: 8 }}>
               <span>Share of {meta.shareLabel}</span>
-              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-blue)' }}>{sharePct}%</span>
+              <span style={{ color: 'var(--ss-accent)' }}>{sharePct}%</span>
             </div>
-            <div className="progress-bar" style={{ height: 7 }}>
-              <div className="progress-fill" style={{ width: `${Math.min(sharePct, 100)}%`, background: 'var(--accent-blue)' }} />
+            <div style={{ height: 7, borderRadius: 99, background: 'var(--ss-track)', overflow: 'hidden' }}>
+              <div style={{ height: '100%', borderRadius: 99, width: `${Math.min(sharePct, 100)}%`, background: 'var(--ss-chart-grad)', transition: 'width 0.6s ease' }} />
             </div>
           </div>
         )}
@@ -237,22 +308,22 @@ function ActiveRow({ game, timePeriod, onClick }) {
 
   return (
     <article
-      className="card" onClick={onClick}
+      className="ss-panel" onClick={onClick}
       style={{ padding: 14, display: 'flex', gap: 14, alignItems: 'center', flex: 1, cursor: 'pointer' }}
     >
-      <div style={{ width: 46, height: 69, flexShrink: 0, borderRadius: 12, overflow: 'hidden', background: 'var(--bg-tertiary)' }}>
+      <div style={{ width: 46, height: 69, flexShrink: 0, borderRadius: 12, overflow: 'hidden', background: 'var(--ss-inset)' }}>
         <GameCapsule appId={game.appid} name={game.name} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontSize: 14.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--ss-ink)' }}>
           {game.name}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+        <div style={{ fontSize: 12, color: 'var(--ss-ink3)', marginTop: 3 }}>
           {lastPlayed ? `Played ${formatLastPlayed(lastPlayed)}` : 'Recently active'}
           {allTimeMinutes > 0 ? ` · ${formatHours(allTimeMinutes)} all time` : ''}
         </div>
       </div>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 17, color: 'var(--text-primary)', flexShrink: 0 }}>
+      <div style={{ fontSize: 17, color: 'var(--ss-ink)', flexShrink: 0 }}>
         {formatHours(periodMinutes)}
       </div>
     </article>
@@ -270,10 +341,10 @@ function TimeBreakdown({ periodGames, timePeriod, totalPeriodMinutes }) {
 
   const slices = top.map((g, i) => ({
     id: g.appid, name: g.name, minutes: getPeriodMinutes(g, timePeriod),
-    color: tint(i, sliceCount), ink: i < 2 ? '#fffdfa' : 'var(--text-secondary)',
+    color: tint(i, sliceCount), ink: i < 2 ? 'var(--ss-bg)' : 'var(--ss-ink2)',
   }));
   if (restTotal > 0) {
-    slices.push({ id: 'other', name: `${rest.length} other game${rest.length === 1 ? '' : 's'}`, minutes: restTotal, color: 'rgba(42,38,33,0.12)', ink: 'var(--text-secondary)' });
+    slices.push({ id: 'other', name: `${rest.length} other game${rest.length === 1 ? '' : 's'}`, minutes: restTotal, color: 'var(--ss-track)', ink: 'var(--ss-ink2)' });
   }
 
   return (
@@ -288,7 +359,7 @@ function TimeBreakdown({ periodGames, timePeriod, totalPeriodMinutes }) {
               display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
             }}>
               {pct > 5.5 && (
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: s.ink, whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 11, color: s.ink, whiteSpace: 'nowrap' }}>
                   {Math.round(pct)}%
                 </span>
               )}
@@ -298,15 +369,15 @@ function TimeBreakdown({ periodGames, timePeriod, totalPeriodMinutes }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '0 48px' }}>
         {slices.map(s => (
-          <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+          <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: '1px solid var(--ss-line-soft)' }}>
             <span style={{ width: 9, height: 9, borderRadius: 3, flexShrink: 0, background: s.color }} />
-            <span style={{ flex: 1, fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ flex: 1, fontSize: 14, color: 'var(--ss-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {s.name}
             </span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)', flexShrink: 0 }}>
+            <span style={{ fontSize: 13, color: 'var(--ss-ink3)', flexShrink: 0 }}>
               {totalPeriodMinutes > 0 ? Math.round((s.minutes / totalPeriodMinutes) * 100) : 0}%
             </span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text-primary)', width: 52, textAlign: 'right', flexShrink: 0 }}>
+            <span style={{ fontSize: 14, color: 'var(--ss-ink)', width: 52, textAlign: 'right', flexShrink: 0 }}>
               {formatHours(s.minutes)}
             </span>
           </div>
@@ -330,14 +401,14 @@ function FooterStats({ ownedGames, gamesPlayed, totalLaunches, avgSessionHours, 
   ].filter(Boolean);
 
   return (
-    <section style={{ borderTop: '1px solid var(--border-default)', paddingTop: 24, display: 'flex', flexWrap: 'wrap', gap: 44 }}>
+    <section style={{ borderTop: '1px solid var(--ss-line)', paddingTop: 24, display: 'flex', flexWrap: 'wrap', gap: 44 }}>
       {items.map(it => (
         <div key={it.label}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 19, color: 'var(--text-primary)' }}>{it.value}</div>
-          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>{it.label}</div>
+          <div style={{ fontSize: 19, color: 'var(--ss-ink)' }}>{it.value}</div>
+          <div style={{ fontSize: 11.5, color: 'var(--ss-ink3)', marginTop: 4 }}>{it.label}</div>
         </div>
       ))}
-      <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)', alignSelf: 'flex-end' }}>
+      <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--ss-ink3)', alignSelf: 'flex-end' }}>
         Steam API{sinceDate ? ` · local snapshots since ${sinceDate}` : ''}
       </div>
     </section>
@@ -347,9 +418,9 @@ function FooterStats({ ownedGames, gamesPlayed, totalLaunches, avgSessionHours, 
 function EmptyState({ timePeriod }) {
   const meta = PERIOD_META[timePeriod];
   return (
-    <div style={{ textAlign: 'center', padding: '96px 40px', color: 'var(--text-muted)' }}>
+    <div style={{ textAlign: 'center', padding: '96px 40px', color: 'var(--ss-ink3)' }}>
       <div style={{ fontSize: 40, marginBottom: 16 }}>🎮</div>
-      <h3 style={{ fontSize: 19, marginBottom: 8, color: 'var(--text-secondary)' }}>No playtime data for this period</h3>
+      <h3 style={{ fontSize: 19, marginBottom: 8, color: 'var(--ss-ink2)' }}>No playtime data for this period</h3>
       <p style={{ fontSize: 14 }}>
         {timePeriod === 'alltime' ? 'No games with recorded playtime yet.' : `No games played ${meta.phrase}.`}
       </p>
@@ -363,7 +434,7 @@ export default function Dashboard() {
     localConfig, achCache, steamId,
   } = useApp();
   const [selectedGame, setSelectedGame] = useState(null);
-  const [anchorRect, setAnchorRect] = useState(null);
+  const [activeFilter, setActiveFilter] = useState(null);
 
   // Period-toggle state — moved here from Navbar, since this is the only
   // page that reads timePeriod/getGamesForPeriod.
@@ -387,22 +458,22 @@ export default function Dashboard() {
   }, [featureFlags]);
 
   // Clear selection when period changes
-  useEffect(() => { setSelectedGame(null); setAnchorRect(null); }, [timePeriod]);
+  useEffect(() => { setSelectedGame(null); setActiveFilter(null); }, [timePeriod]);
 
-  const handleSelectGame = useCallback((game, e) => {
-    if (selectedGame?.appid === game.appid) {
-      setSelectedGame(null); setAnchorRect(null);
-    } else {
-      setSelectedGame(game);
-      setAnchorRect(e?.currentTarget?.getBoundingClientRect() ?? null);
-    }
-  }, [selectedGame]);
+  const handleSelectGame = useCallback((game) => {
+    setSelectedGame(prev => prev?.appid === game.appid ? null : game);
+  }, []);
+
+  const toggleFilter = useCallback((appid) => {
+    setActiveFilter(prev => prev === appid ? null : appid);
+  }, []);
 
   const periodGames = [...getGamesForPeriod()]
     .filter(g => getPeriodMinutes(g, timePeriod) > 0)
     .sort((a, b) => getPeriodMinutes(b, timePeriod) - getPeriodMinutes(a, timePeriod));
 
   const totalPeriodMinutes = periodGames.reduce((s, g) => s + getPeriodMinutes(g, timePeriod), 0);
+  const filteredGame = activeFilter != null ? periodGames.find(g => g.appid === activeFilter) : null;
 
   const avgSessionHours = ownedGames.reduce((sum, g) => {
     if (g.launchCount && g.playtime_forever) return sum + (g.playtime_forever / 60 / g.launchCount);
@@ -419,7 +490,7 @@ export default function Dashboard() {
   const alsoActive = periodGames.slice(1, 4);
 
   return (
-    <div style={{ maxWidth: 1180, margin: '0 auto', padding: '56px 24px 96px', display: 'flex', flexDirection: 'column', gap: 56 }}>
+    <div style={{ maxWidth: 1180, margin: '0 auto', padding: '34px 24px 96px', display: 'flex', flexDirection: 'column', gap: 40 }}>
       {periodGames.length === 0 ? (
         <EmptyState timePeriod={timePeriod} />
       ) : (
@@ -427,7 +498,17 @@ export default function Dashboard() {
           <HeroSection
             periodGames={periodGames} totalPeriodMinutes={totalPeriodMinutes} timePeriod={timePeriod} steamId={steamId}
             periodToggleProps={{ enabledPeriods, setTimePeriod, hoveredPeriod, setHoveredPeriod }}
+            activeFilter={activeFilter} onToggleFilter={toggleFilter}
           />
+
+          {filteredGame && (
+            <CrossFilterBanner
+              label={filteredGame.name}
+              onClear={() => setActiveFilter(null)}
+            />
+          )}
+
+          <RecentVsLifetime periodGames={periodGames} timePeriod={timePeriod} activeFilter={activeFilter} onToggleFilter={toggleFilter} />
 
           <TonightPick />
 
@@ -442,12 +523,12 @@ export default function Dashboard() {
                 game={heroGame} timePeriod={timePeriod}
                 periodMinutes={getPeriodMinutes(heroGame, timePeriod)}
                 totalPeriodMinutes={totalPeriodMinutes} steamId={steamId}
-                onClick={e => handleSelectGame(heroGame, e)}
+                onClick={() => handleSelectGame(heroGame)}
               />
               {alsoActive.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {alsoActive.map(g => (
-                    <ActiveRow key={g.appid} game={g} timePeriod={timePeriod} onClick={e => handleSelectGame(g, e)} />
+                    <ActiveRow key={g.appid} game={g} timePeriod={timePeriod} onClick={() => handleSelectGame(g)} />
                   ))}
                 </div>
               )}
@@ -466,8 +547,7 @@ export default function Dashboard() {
             <GameDetailPanel
               game={selectedGame}
               achData={achCache[selectedGame.appid]}
-              anchorRect={anchorRect}
-              onClose={() => { setSelectedGame(null); setAnchorRect(null); }}
+              onClose={() => setSelectedGame(null)}
             />
           )}
         </>

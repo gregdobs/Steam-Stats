@@ -1,59 +1,35 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useEffect } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
-import { formatHours, formatLastPlayed, minutesToHours, getCompletionStatus } from '../utils/steam.js';
+import { formatHours, formatLastPlayed, minutesToHours, getCompletionStatus, fetchAchievementRarity } from '../utils/steam.js';
 import { GameHeader } from './GameImage.jsx';
+import DetailSheet from './DetailSheet.jsx';
 
-const PANEL_W = 300;
-const PANEL_H = 480; // estimated max height
-const MARGIN  = 12;  // gap between card edge and panel
+const STATUS_COLOR = {
+  'Barely Started': 'var(--ss-ink3)',
+  'In Progress':    'var(--ss-accent)',
+  'Getting There':  'var(--ss-cat-4)',
+  'Completed':      'var(--ss-cat-3)',
+  'Overplayer':     'var(--ss-cat-2)',
+};
 
-// ── Floating popover panel ─────────────────────────────────
-// anchorRect: DOMRect of the element that was clicked
-// If no anchorRect, renders inline (e.g. in Settings modal)
-export default function GameDetailPanel({ game, onClose, achData, hltbData, anchorRect, inline }) {
+// game detail — renders inside a slide-in DetailSheet, or inline (no sheet
+// chrome) when embedded directly in another surface, e.g. Settings' games list.
+export default function GameDetailPanel({ game, onClose, achData, hltbData, inline }) {
   const { ownedGames, recentGames } = useApp();
-  const panelRef = useRef(null);
-  const [pos, setPos] = useState(null);
+  const [rarity, setRarity] = useState(null);
 
-  // Escape key
+  // Global unlock rate for this game's achievements, scoped to a single
+  // appid — same fetchAchievementRarity used by the Rarest Unlocks widget,
+  // just called for whichever game's sheet happens to be open.
   useEffect(() => {
-    const h = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [onClose]);
-
-  // Compute best position relative to anchorRect
-  useEffect(() => {
-    if (!anchorRect || inline) return;
-
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
-    // Prefer right of card; fall back left, then below, then above
-    let left, top;
-
-    // Try right
-    if (anchorRect.right + MARGIN + PANEL_W <= vw - MARGIN) {
-      left = anchorRect.right + MARGIN;
-    }
-    // Try left
-    else if (anchorRect.left - MARGIN - PANEL_W >= MARGIN) {
-      left = anchorRect.left - MARGIN - PANEL_W;
-    }
-    // Fall back: align to right edge of viewport
-    else {
-      left = Math.max(MARGIN, vw - PANEL_W - MARGIN);
-    }
-
-    // Vertically: align top with card, clamp to viewport
-    top = Math.min(
-      Math.max(MARGIN, anchorRect.top + window.scrollY),
-      window.scrollY + vh - PANEL_H - MARGIN
-    );
-
-    setPos({ left, top });
-  }, [anchorRect, inline]);
+    setRarity(null);
+    if (!game?.appid || !achData?.earnedDetails?.length) return;
+    let cancelled = false;
+    fetchAchievementRarity([game.appid]).then(result => {
+      if (!cancelled) setRarity(result[game.appid] || null);
+    });
+    return () => { cancelled = true; };
+  }, [game?.appid, achData?.earnedDetails?.length]);
 
   if (!game) return null;
 
@@ -82,130 +58,112 @@ export default function GameDetailPanel({ game, onClose, achData, hltbData, anch
   const achPct     = achData?.pct       ?? null;
   const lastUnlock = achData?.lastUnlockTime;
 
-  const STATUS_COLOR = {
-    'Barely Started': 'var(--text-muted)',
-    'In Progress':    'var(--accent-blue)',
-    'Getting There':  'var(--accent-amber)',
-    'Completed':      'var(--accent-emerald)',
-    'Overplayer':     'var(--accent-violet)',
-  };
-
   const content = (
-    <div
-      ref={panelRef}
-      tabIndex={-1}
-      className="card"
-      style={{
-        width: PANEL_W,
-        maxHeight: `min(${PANEL_H}px, 85vh)`,
-        overflow: 'hidden',
-        display: 'flex', flexDirection: 'column',
-        outline: 'none',
-        boxShadow: 'var(--shadow-xl)',
-        // When floating, position is handled by wrapper
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Header image */}
-      <div style={{ height: 120, background: 'var(--bg-tertiary)', position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+      <div style={{ height: 180, background: 'var(--ss-inset)', position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
         <GameHeader appId={game.appid} name={game.name} />
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.1) 60%, transparent 100%)' }} />
-        <button
-          onClick={onClose} aria-label="Close"
-          style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s' }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.85)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.55)'}
-        >✕</button>
+        <div style={{ position: 'absolute', inset: 0, background: 'var(--ss-scrim)' }} />
+        {!inline && (
+          <button
+            onClick={onClose} aria-label="Close"
+            style={{ position: 'absolute', top: 14, right: 14, width: 30, height: 30, borderRadius: '50%', background: 'var(--ss-btn)', border: '1px solid var(--ss-line)', color: 'var(--ss-ink)', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}
+          >✕</button>
+        )}
         {rank > 0 && (
-          <div style={{ position: 'absolute', bottom: 8, left: 10, fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.75)', fontFamily: 'var(--font-display)' }}>
+          <div style={{ position: 'absolute', bottom: 12, left: 16, fontSize: 11, fontWeight: 600, color: 'var(--ss-ink2)' }}>
             #{rank} in library
           </div>
         )}
         {completionStatus && (
-          <div style={{ position: 'absolute', bottom: 8, right: 10 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 99, background: 'rgba(0,0,0,0.6)', color: STATUS_COLOR[completionStatus.label] || 'white' }}>
+          <div style={{ position: 'absolute', bottom: 12, right: 16 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 99, background: 'var(--ss-inset)', border: '1px solid var(--ss-line)', color: STATUS_COLOR[completionStatus.label] || 'var(--ss-ink)' }}>
               {completionStatus.icon} {completionStatus.label}
             </span>
           </div>
         )}
+        <div style={{ position: 'absolute', bottom: 12, left: 16, fontSize: 17, fontWeight: 600, color: 'var(--ss-ink)', lineHeight: 1.3, maxWidth: '80%' }}>
+          {rank > 0 ? null : game.name}
+        </div>
       </div>
 
-      {/* Scrollable body */}
-      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto', flex: 1 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>
+      {/* Body */}
+      <div style={{ padding: '18px 22px 26px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--ss-ink)', lineHeight: 1.3 }}>
           {game.name}
         </div>
 
         {/* Period ring */}
         {periodMinutes > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ position: 'relative', width: 46, height: 46, flexShrink: 0 }}>
-              <svg viewBox="0 0 46 46" width={46} height={46}>
-                <circle cx={23} cy={23} r={17} fill="none" stroke="var(--border-default)" strokeWidth={5} />
-                <circle cx={23} cy={23} r={17} fill="none" stroke="var(--accent-blue)" strokeWidth={5}
-                  strokeDasharray={`${2*Math.PI*17*Math.min(periodPct,100)/100} ${2*Math.PI*17}`}
-                  strokeLinecap="round" transform="rotate(-90 23 23)"
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ position: 'relative', width: 50, height: 50, flexShrink: 0 }}>
+              <svg viewBox="0 0 50 50" width={50} height={50}>
+                <circle cx={25} cy={25} r={19} fill="none" stroke="var(--ss-track)" strokeWidth={5} />
+                <circle cx={25} cy={25} r={19} fill="none" stroke="var(--ss-accent)" strokeWidth={5}
+                  strokeDasharray={`${2*Math.PI*19*Math.min(periodPct,100)/100} ${2*Math.PI*19}`}
+                  strokeLinecap="round" transform="rotate(-90 25 25)"
                   style={{ transition: 'stroke-dasharray 0.6s ease' }}
                 />
               </svg>
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 9, fontWeight: 700, color: 'var(--accent-blue)' }}>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 600, color: 'var(--ss-accent)' }}>
                 {periodPct}%
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 1 }}>Period share</div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{periodPct}% of gaming time</div>
+              <div style={{ fontSize: 11, color: 'var(--ss-ink3)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 2 }}>Period share</div>
+              <div style={{ fontSize: 12.5, color: 'var(--ss-ink2)' }}>{periodPct}% of gaming time</div>
             </div>
           </div>
         )}
 
         {/* Stats grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {[
-            periodMinutes > 0 && { label: 'This Period', value: formatHours(periodMinutes), color: 'var(--accent-blue)' },
-            { label: 'All Time',    value: formatHours(allTimeMinutes),       color: 'var(--text-secondary)' },
-            avgSession &&       { label: 'Avg Session', value: `${avgSession}h`,            color: 'var(--accent-emerald)' },
-            game.launchCount && { label: 'Launches',    value: `${game.launchCount}×`,      color: 'var(--text-secondary)' },
-            { label: '% Library',   value: `${libraryPct}%`,                  color: 'var(--accent-amber)' },
-            lastPlayed &&       { label: 'Last Played', value: formatLastPlayed(lastPlayed), color: 'var(--text-muted)' },
+            periodMinutes > 0 && { label: 'This Period', value: formatHours(periodMinutes), color: 'var(--ss-accent)' },
+            { label: 'All Time',    value: formatHours(allTimeMinutes),       color: 'var(--ss-ink2)' },
+            avgSession &&       { label: 'Avg Session', value: `${avgSession}h`,            color: 'var(--ss-cat-3)' },
+            game.launchCount && { label: 'Launches',    value: `${game.launchCount}×`,      color: 'var(--ss-ink2)' },
+            { label: '% Library',   value: `${libraryPct}%`,                  color: 'var(--ss-cat-4)' },
+            lastPlayed &&       { label: 'Last Played', value: formatLastPlayed(lastPlayed), color: 'var(--ss-ink3)' },
           ].filter(Boolean).slice(0, 6).map(s => (
-            <div key={s.label} style={{ padding: '6px 8px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 1 }}>{s.label}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-display)', color: s.color }}>{s.value}</div>
+            <div key={s.label} style={{ padding: '9px 11px', background: 'var(--ss-inset)', borderRadius: 14, border: '1px solid var(--ss-line-soft)' }}>
+              <div style={{ fontSize: 10, color: 'var(--ss-ink3)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 3 }}>{s.label}</div>
+              <div style={{ fontSize: 14.5, fontWeight: 600, color: s.color }}>{s.value}</div>
             </div>
           ))}
         </div>
 
         {/* Library % bar */}
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>% of library hours</span>
-            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-amber)' }}>{libraryPct}%</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+            <span style={{ fontSize: 11, color: 'var(--ss-ink3)' }}>Share of your lifetime hours</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ss-cat-4)' }}>{libraryPct}%</span>
           </div>
-          <div className="progress-bar" style={{ height: 4 }}>
-            <div className="progress-fill" style={{ width: `${Math.min(libraryPct * 5, 100)}%`, background: 'var(--accent-amber)' }} />
+          <div style={{ height: 6, borderRadius: 99, background: 'var(--ss-track)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', borderRadius: 99, width: `${Math.min(libraryPct * 5, 100)}%`, background: 'var(--ss-cat-4)', transition: 'width 0.6s ease' }} />
           </div>
-          <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+          <div style={{ fontSize: 10.5, color: 'var(--ss-ink4)', marginTop: 4 }}>
             {formatHours(allTimeMinutes)} of {formatHours(totalLibMin)} total
           </div>
         </div>
 
         {/* HLTB */}
         {hltbData && !hltbData.error && hltbMain && (
-          <div style={{ padding: '8px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>HowLongToBeat</div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              {hltbData.mainStory    && <div><div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Main</div><div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{hltbData.mainStory}h</div></div>}
-              {hltbData.mainExtra    && <div><div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase' }}>+Extra</div><div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-secondary)' }}>{hltbData.mainExtra}h</div></div>}
-              {hltbData.completionist && <div><div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase' }}>100%</div><div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-secondary)' }}>{hltbData.completionist}h</div></div>}
+          <div style={{ padding: '11px 13px', background: 'var(--ss-inset)', borderRadius: 14, border: '1px solid var(--ss-line-soft)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--ss-ink3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>HowLongToBeat</div>
+            <div style={{ display: 'flex', gap: 14 }}>
+              {hltbData.mainStory    && <div><div style={{ fontSize: 9.5, color: 'var(--ss-ink4)', textTransform: 'uppercase' }}>Main</div><div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ss-ink)' }}>{hltbData.mainStory}h</div></div>}
+              {hltbData.mainExtra    && <div><div style={{ fontSize: 9.5, color: 'var(--ss-ink4)', textTransform: 'uppercase' }}>+Extra</div><div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ss-ink2)' }}>{hltbData.mainExtra}h</div></div>}
+              {hltbData.completionist && <div><div style={{ fontSize: 9.5, color: 'var(--ss-ink4)', textTransform: 'uppercase' }}>100%</div><div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ss-ink2)' }}>{hltbData.completionist}h</div></div>}
             </div>
             {completionPct !== null && (
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                  <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Your completion</span>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: completionPct >= 100 ? 'var(--accent-emerald)' : 'var(--accent-blue)' }}>{completionPct > 200 ? '200%+' : `${completionPct}%`}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 10, color: 'var(--ss-ink3)' }}>Your completion</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: completionPct >= 100 ? 'var(--ss-cat-3)' : 'var(--ss-accent)' }}>{completionPct > 200 ? '200%+' : `${completionPct}%`}</span>
                 </div>
-                <div className="progress-bar" style={{ height: 4 }}>
-                  <div className="progress-fill" style={{ width: `${Math.min(completionPct, 100)}%`, background: completionPct >= 100 ? 'var(--accent-emerald)' : completionPct >= 75 ? 'var(--accent-amber)' : 'var(--accent-blue)' }} />
+                <div style={{ height: 5, borderRadius: 99, background: 'var(--ss-track)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 99, width: `${Math.min(completionPct, 100)}%`, background: completionPct >= 100 ? 'var(--ss-cat-3)' : completionPct >= 75 ? 'var(--ss-cat-4)' : 'var(--ss-accent)' }} />
                 </div>
               </div>
             )}
@@ -214,32 +172,56 @@ export default function GameDetailPanel({ game, onClose, achData, hltbData, anch
 
         {/* Achievements */}
         {achTotal > 0 && earned !== null && (
-          <div style={{ padding: '8px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <div style={{ padding: '11px 13px', background: 'var(--ss-inset)', borderRadius: 14, border: '1px solid var(--ss-line-soft)', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Achievements</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: achPct === 100 ? 'var(--accent-emerald)' : 'var(--accent-blue)' }}>{earned}/{achTotal} · {achPct}%</div>
+              <div style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--ss-ink3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Achievements</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: achPct === 100 ? 'var(--ss-cat-3)' : 'var(--ss-accent)' }}>{earned}/{achTotal} · {achPct}%</div>
             </div>
-            <div className="progress-bar" style={{ height: 4 }}>
-              <div className="progress-fill" style={{ width: `${achPct ?? 0}%`, background: achPct === 100 ? 'var(--accent-emerald)' : achPct >= 75 ? 'var(--accent-amber)' : 'var(--accent-blue)' }} />
+            <div style={{ height: 5, borderRadius: 99, background: 'var(--ss-track)', overflow: 'hidden' }}>
+              <div style={{ height: '100%', borderRadius: 99, width: `${achPct ?? 0}%`, background: achPct === 100 ? 'var(--ss-cat-3)' : achPct >= 75 ? 'var(--ss-cat-4)' : 'var(--ss-accent)' }} />
             </div>
-            {lastUnlock > 0 && <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>Last unlock: {formatLastPlayed(lastUnlock)}</div>}
+            {lastUnlock > 0 && <div style={{ fontSize: 10, color: 'var(--ss-ink4)' }}>Last unlock: {formatLastPlayed(lastUnlock)}</div>}
+          </div>
+        )}
+
+        {/* Recent unlocks with global rate% */}
+        {rarity && achData?.earnedDetails?.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--ss-ink3)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Recent unlocks</div>
+            {[...achData.earnedDetails]
+              .filter(a => a.unlocktime)
+              .sort((a, b) => b.unlocktime - a.unlocktime)
+              .slice(0, 5)
+              .map(a => {
+                const percent = rarity[a.apiname];
+                return (
+                  <div key={a.apiname} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                    <span style={{ flex: 1, fontSize: 12, color: 'var(--ss-ink2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.displayName}</span>
+                    <span style={{ fontSize: 10.5, color: 'var(--ss-ink4)', flexShrink: 0 }}>{formatLastPlayed(a.unlocktime)}</span>
+                    {percent != null && (
+                      <span style={{ fontSize: 10.5, color: 'var(--ss-cat-2)', flexShrink: 0, width: 40, textAlign: 'right' }}>
+                        {percent < 1 ? percent.toFixed(1) : Math.round(percent)}%
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
           </div>
         )}
 
         {/* Tags */}
         {game.userTags?.length > 0 && (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
             {game.userTags.map(tag => (
-              <span key={tag} style={{ fontSize: 10, padding: '2px 6px', borderRadius: 'var(--radius-full)', background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)', fontWeight: 600 }}>{tag}</span>
+              <span key={tag} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, background: 'var(--ss-pill-bg)', border: '1px solid var(--ss-pill-line)', color: 'var(--ss-pill-ink)', fontWeight: 500 }}>{tag}</span>
             ))}
           </div>
         )}
 
         {/* Steam store link */}
         <a href={`https://store.steampowered.com/app/${game.appid}`} target="_blank" rel="noopener noreferrer"
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '7px', borderRadius: 'var(--radius-md)', background: 'var(--bg-tertiary)', border: '1px solid var(--border-default)', color: 'var(--text-muted)', fontSize: 12, textDecoration: 'none', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-blue-dim)'; e.currentTarget.style.color = 'var(--accent-blue)'; e.currentTarget.style.borderColor = 'var(--accent-blue)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-tertiary)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-default)'; }}
+          className="ss-pill"
+          style={{ justifyContent: 'center', textDecoration: 'none' }}
         >
           View on Steam Store ↗
         </a>
@@ -247,39 +229,13 @@ export default function GameDetailPanel({ game, onClose, achData, hltbData, anch
     </div>
   );
 
-  // Inline mode (used inside sub-modals like Settings)
-  if (inline || !anchorRect) {
-    return (
-      <div style={{ animation: 'fadeIn 0.22s ease' }}>
-        {content}
-      </div>
-    );
+  if (inline) {
+    return <div style={{ animation: 'ssFade 0.22s ease' }}>{content}</div>;
   }
 
-  // Floating mode — renders into a portal so it escapes any overflow:hidden containers
-  return createPortal(
-    <>
-      {/* Click-outside backdrop (invisible) */}
-      <div
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, zIndex: 399 }}
-        aria-hidden="true"
-      />
-      {/* Panel */}
-      <div
-        style={{
-          position: 'absolute',
-          top: pos?.top ?? 0,
-          left: pos?.left ?? 0,
-          zIndex: 400,
-          animation: 'fadeIn 0.18s ease',
-          pointerEvents: pos ? 'auto' : 'none',
-          opacity: pos ? 1 : 0,
-        }}
-      >
-        {content}
-      </div>
-    </>,
-    document.body
+  return (
+    <DetailSheet open={!!game} onClose={onClose}>
+      {content}
+    </DetailSheet>
   );
 }

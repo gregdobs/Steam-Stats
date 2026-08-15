@@ -46,7 +46,7 @@ export function GameCapsule({ appId, name, style = {}, onLoaded }) {
     return (
       <div style={{
         width: '100%', height: '100%',
-        background: 'linear-gradient(135deg, var(--bg-tertiary), var(--bg-elevated))',
+        background: 'linear-gradient(135deg, var(--ss-inset), var(--ss-panel))',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: 6,
         ...style,
@@ -54,7 +54,7 @@ export function GameCapsule({ appId, name, style = {}, onLoaded }) {
         <div style={{ fontSize: 28 }}>🎮</div>
         {name && (
           <div style={{
-            fontSize: 10, color: 'var(--text-muted)', textAlign: 'center',
+            fontSize: 10, color: 'var(--ss-ink3)', textAlign: 'center',
             padding: '0 8px', lineHeight: 1.3,
             overflow: 'hidden', maxHeight: 36,
           }}>
@@ -84,7 +84,7 @@ export function GameCapsule({ appId, name, style = {}, onLoaded }) {
       style={{
         width: '100%', height: '100%',
         objectFit: isLandscape ? 'contain' : 'cover',
-        background: isLandscape ? 'var(--bg-tertiary)' : undefined,
+        background: isLandscape ? 'var(--ss-inset)' : undefined,
         opacity: loaded ? 1 : 0,
         transition: 'opacity 0.3s ease',
         ...style,
@@ -122,7 +122,7 @@ export function GameHeader({ appId, name, style = {} }) {
     return (
       <div style={{
         width: '100%', height: '100%',
-        background: 'linear-gradient(135deg, var(--bg-tertiary), var(--border-strong))',
+        background: 'linear-gradient(135deg, var(--ss-inset), var(--ss-line))',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         ...style,
       }}>

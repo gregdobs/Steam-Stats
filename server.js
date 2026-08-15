@@ -354,6 +354,7 @@ app.get('/api/steam/achievements-batch', async (req, res) => {
           return {
             apiname: a.apiname,
             displayName: schema?.displayName || a.apiname,
+            description: schema?.description || null,
             icon: schema?.icon || null,
             unlocktime: a.unlocktime,
           };
