@@ -24,8 +24,8 @@ function saveFeatureFlags(flags) {
 
 export { loadFeatureFlags, saveFeatureFlags, ALL_TIME_PERIODS, FEATURE_FLAGS_KEY };
 
-// Thin line-art icons (stroke, no fill) matching the redesign's icon language —
-// replaces the old emoji glyphs. `currentColor` picks up each nav button's text color.
+// Thin line-art icons (stroke, no fill) — `currentColor` picks up each nav
+// button's text color.
 const NAV_ICONS = {
   dashboard: (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="2" y="2" width="5" height="5" rx="1.2"></rect><rect x="9" y="2" width="5" height="5" rx="1.2"></rect><rect x="2" y="9" width="5" height="5" rx="1.2"></rect><rect x="9" y="9" width="5" height="5" rx="1.2"></rect></svg>
@@ -63,8 +63,8 @@ function getConnectionStatus(profile, dataLoaded) {
 }
 
 const STATUS_COLORS = {
-  online: '#10b981', busy: '#f43f5e', away: '#f59e0b',
-  offline: '#64748b', disconnected: '#64748b',
+  online: '#7fe3c4', busy: '#f2789a', away: '#f2a35e',
+  offline: 'var(--ss-ink4)', disconnected: 'var(--ss-ink4)',
 };
 const STATUS_LABELS = {
   online: 'Online', busy: 'Busy', away: 'Away',
@@ -75,15 +75,10 @@ export function SourceBadge({ source, active }) {
   const isApi = source === 'api';
   return (
     <span style={{
-      fontFamily: 'var(--font-mono)',
       fontSize: 8, fontWeight: 500, letterSpacing: '0.4px', textTransform: 'uppercase',
       padding: '1px 4px', borderRadius: 3, lineHeight: 1.4, transition: 'all 0.15s',
-      background: active
-        ? (isApi ? 'rgba(180,98,60,0.2)' : 'rgba(138,107,143,0.2)')
-        : 'rgba(128,128,128,0.15)',
-      color: active
-        ? (isApi ? '#8f4b2d' : '#6b5470')
-        : 'var(--text-muted)',
+      background: active ? 'var(--ss-pill-bg)' : 'var(--ss-btn)',
+      color: active ? 'var(--ss-pill-ink)' : 'var(--ss-ink4)',
     }}>
       {isApi ? 'API' : 'SNP'}
     </span>
@@ -92,7 +87,7 @@ export function SourceBadge({ source, active }) {
 
 export default function Navbar() {
   const {
-    theme, toggleTheme, profile, activePage, setActivePage,
+    profile, activePage, setActivePage,
     dataLoaded, loadData, config,
   } = useApp();
 
@@ -104,117 +99,127 @@ export default function Navbar() {
 
   return (
     <>
-      <nav style={{
-        position: 'sticky', top: 0, zIndex: 100,
-        background: theme === 'dark' ? 'rgba(28,23,18,0.88)' : 'rgba(246,243,238,0.86)',
-        backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-        borderBottom: '1px solid var(--border-subtle)',
-        height: 'var(--nav-height)',
-        display: 'flex', alignItems: 'center',
-        padding: '0 24px', gap: '20px',
-      }}>
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="var(--accent-blue)" strokeWidth="1.6" strokeLinecap="round"><circle cx="10" cy="10" r="7.2"></circle><path d="M10 5.4V10l3 2"></path></svg>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
-            Steam Stats
-          </span>
-        </div>
-
-        {/* Nav items */}
-        {dataLoaded && (
-          <div style={{ display: 'flex', gap: 4, flex: 1 }}>
-            {NAV_ITEMS.map(item => (
-              <button key={item.id} onClick={() => setActivePage(item.id)} style={{
-                background: activePage === item.id ? 'var(--accent-blue-dim)' : 'transparent',
-                border: 'none', borderRadius: 9, padding: '7px 12px',
-                cursor: 'pointer',
-                color: activePage === item.id ? 'var(--text-primary)' : 'var(--text-secondary)',
-                fontSize: 13.5, fontWeight: activePage === item.id ? 500 : 400,
-                fontFamily: 'var(--font-body)', transition: 'all 0.15s ease',
-                display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap',
-              }}
-                onMouseEnter={e => { if (activePage !== item.id) e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
-                onMouseLeave={e => { if (activePage !== item.id) e.currentTarget.style.background = 'transparent'; }}
-              >
-                <span style={{ display: 'flex', color: activePage === item.id ? 'var(--accent-blue)' : 'currentColor' }}>{NAV_ICONS[item.id]}</span>{item.label}
-              </button>
-            ))}
+      <nav style={{ position: 'sticky', top: 0, zIndex: 60, padding: '14px 26px 10px' }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 20,
+          maxWidth: 1240, margin: '0 auto', padding: '9px 12px 9px 18px',
+          borderRadius: 22,
+          background: 'var(--ss-panel-hi)',
+          border: '1px solid var(--ss-line)',
+          boxShadow: `var(--ss-shadow), inset 0 1px 0 var(--ss-hi)`,
+          backdropFilter: 'blur(var(--ss-blur)) saturate(var(--ss-sat))',
+          WebkitBackdropFilter: 'blur(var(--ss-blur)) saturate(var(--ss-sat))',
+        }}>
+          {/* Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            <span style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 28, height: 28, borderRadius: 9,
+              background: 'var(--ss-chart-band)',
+              boxShadow: '0 6px 16px -7px var(--ss-chart-glow), inset 0 1px 0 rgba(255,255,255,.45)',
+            }}>
+              <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#06121c" strokeWidth="2.2" strokeLinecap="round"><path d="M5 15V11.2"></path><path d="M10 15V7.6"></path><path d="M15 15V5.4"></path></svg>
+            </span>
+            <span style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-0.2px', color: 'var(--ss-ink)' }}>
+              Steam Stats
+            </span>
           </div>
-        )}
 
-        <div style={{ flex: dataLoaded ? 0 : 1 }} />
-
-        {/* Right side */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={toggleTheme} className="btn btn-ghost" style={{ width: 34, height: 34, padding: 0, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }} aria-label="Toggle theme">
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
+          {/* Nav items */}
           {dataLoaded && (
-            <button
-              onClick={() => loadData(config.apiKey, config.steamUrl)}
-              className="btn btn-ghost"
-              style={{ width: 34, height: 34, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              title="Refresh data"
-              aria-label="Refresh data"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M23 4v6h-6" /><path d="M1 20v-6h6" />
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-              </svg>
-            </button>
-          )}
-          {dataLoaded && (
-            <button
-              onClick={() => setShowShareCard(true)}
-              className="btn btn-ghost"
-              style={{ width: 34, height: 34, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              title="Create share card"
-              aria-label="Create share card"
-            >
-              {/* Standard "share" glyph — three connected nodes, universally recognizable */}
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-                <line x1="8.59" y1="10.51" x2="15.42" y2="6.51" /><line x1="8.59" y1="13.49" x2="15.42" y2="17.49" />
-              </svg>
-            </button>
+            <div style={{ display: 'flex', gap: 4, flex: 1 }}>
+              {NAV_ITEMS.map(item => {
+                const active = activePage === item.id;
+                return (
+                  <button key={item.id} onClick={() => setActivePage(item.id)} style={{
+                    display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap',
+                    padding: '7px 13px', borderRadius: 14,
+                    fontSize: 13.5, fontWeight: active ? 500 : 400,
+                    cursor: 'pointer', transition: 'all 0.15s ease',
+                    color: active ? 'var(--ss-ink)' : 'var(--ss-ink2)',
+                    background: active ? 'linear-gradient(160deg, var(--ss-pill-bg), transparent)' : 'transparent',
+                    border: active ? '1px solid var(--ss-pill-line)' : '1px solid transparent',
+                    boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,.14)' : 'none',
+                  }}
+                    onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--ss-btn)'; }}
+                    onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span style={{ display: 'flex', color: active ? 'var(--ss-accent)' : 'currentColor' }}>{NAV_ICONS[item.id]}</span>{item.label}
+                  </button>
+                );
+              })}
+            </div>
           )}
 
-          {profile ? (
-            <button
-              onClick={() => setShowSettings(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                background: 'var(--bg-tertiary)', border: '1px solid var(--border-default)',
-                borderRadius: 'var(--radius-md)', padding: '5px 10px 5px 6px',
-                cursor: 'pointer', transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
-              title={`${profile.personaname} — ${STATUS_LABELS[connStatus]} · Open Settings`}
-            >
-              <div style={{ position: 'relative', flexShrink: 0 }}>
-                <img src={profile.avatarmedium} alt={profile.personaname} style={{ width: 26, height: 26, borderRadius: '50%', display: 'block' }} />
-                <div style={{
-                  position: 'absolute', bottom: -1, right: -1,
-                  width: 9, height: 9, borderRadius: '50%',
-                  background: statusColor, border: '2px solid var(--bg-primary)',
-                  boxShadow: `0 0 6px ${statusColor}`, transition: 'background 0.3s',
-                }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>
-                  {profile.personaname}
-                </span>
-                <span style={{ fontSize: 10, color: statusColor, lineHeight: 1.2, fontWeight: 500 }}>
-                  {STATUS_LABELS[connStatus]}
-                </span>
-              </div>
-              <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 2 }}>⚙</span>
-            </button>
-          ) : (
-            <button onClick={() => setShowSettings(true)} className="btn btn-ghost" style={{ padding: '6px 10px', fontSize: 15 }} title="Settings">⚙️</button>
-          )}
+          <div style={{ flex: dataLoaded ? 0 : 1 }} />
+
+          {/* Right side */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {dataLoaded && (
+              <button
+                onClick={() => loadData(config.apiKey, config.steamUrl)}
+                className="ss-pill"
+                style={{ width: 34, height: 34, padding: 0, justifyContent: 'center' }}
+                title="Refresh data"
+                aria-label="Refresh data"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M23 4v6h-6" /><path d="M1 20v-6h6" />
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
+              </button>
+            )}
+            {dataLoaded && (
+              <button
+                onClick={() => setShowShareCard(true)}
+                className="ss-pill"
+                style={{ width: 34, height: 34, padding: 0, justifyContent: 'center' }}
+                title="Create share card"
+                aria-label="Create share card"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                  <line x1="8.59" y1="10.51" x2="15.42" y2="6.51" /><line x1="8.59" y1="13.49" x2="15.42" y2="17.49" />
+                </svg>
+              </button>
+            )}
+
+            {profile ? (
+              <button
+                onClick={() => setShowSettings(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 9,
+                  padding: '5px 12px 5px 6px', borderRadius: 14,
+                  background: 'var(--ss-btn)', border: '1px solid var(--ss-line)',
+                  cursor: 'pointer', transition: 'all 0.15s', color: 'var(--ss-ink)',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--ss-btn-hi)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'var(--ss-btn)'}
+                title={`${profile.personaname} — ${STATUS_LABELS[connStatus]} · Open Settings`}
+              >
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <img src={profile.avatarmedium} alt={profile.personaname} style={{ width: 26, height: 26, borderRadius: '50%', display: 'block' }} />
+                  <div style={{
+                    position: 'absolute', bottom: -1, right: -1,
+                    width: 9, height: 9, borderRadius: '50%',
+                    background: statusColor, border: '2px solid var(--ss-bg)',
+                    boxShadow: `0 0 6px ${statusColor}`, transition: 'background 0.3s',
+                  }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--ss-ink)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>
+                    {profile.personaname}
+                  </span>
+                  <span style={{ fontSize: 10, color: statusColor, lineHeight: 1.2, fontWeight: 500 }}>
+                    {STATUS_LABELS[connStatus]}
+                  </span>
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--ss-ink3)' }}>⚙</span>
+              </button>
+            ) : (
+              <button onClick={() => setShowSettings(true)} className="ss-pill" style={{ padding: '6px 10px', fontSize: 15 }} title="Settings">⚙️</button>
+            )}
+          </div>
         </div>
       </nav>
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}

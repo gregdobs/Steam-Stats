@@ -4,6 +4,7 @@ import { saveConfig, formatHours, formatLastPlayed } from '../utils/steam.js';
 import { GameHeader } from './GameImage.jsx';
 import GameDetailPanel from './GameDetailPanel.jsx';
 import { loadFeatureFlags, saveFeatureFlags } from './Navbar.jsx';
+import { THEMES, BLUR_STEPS } from '../utils/themes.js';
 
 // ── Toggle switch ──────────────────────────────────────────
 function ToggleSwitch({ on, onChange }) {
@@ -220,6 +221,7 @@ function GamesModal({ userData, ownedGames, onClose }) {
             <GameDetailPanel
               game={selectedGame}
               onClose={() => setSelectedGame(null)}
+              inline
             />
           </div>
         )}
@@ -754,7 +756,7 @@ function HLTBSettings() {
 
 // ── Display Section ────────────────────────────────────────
 function DisplaySettings() {
-  const { theme, toggleTheme } = useApp();
+  const { theme, setTheme, blurIntensity, setBlurIntensity } = useApp();
   const [flags, setFlags] = useState(loadFeatureFlags);
 
   const toggleFlag = (key) => {
@@ -765,17 +767,46 @@ function DisplaySettings() {
 
   return (
     <>
-      <Section title="Display">
-        <Row label="Theme" description="Light or dark mode. Also follows your system preference on first load." last>
-          <div style={{ display: 'flex', gap: 2, padding: 3, background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)' }}>
-            {['light', 'dark'].map(t => (
-              <button key={t} onClick={() => { if (theme !== t) toggleTheme(); }} style={{
-                background: theme === t ? 'var(--accent-blue)' : 'transparent',
-                color: theme === t ? 'white' : 'var(--text-muted)',
+      <Section title="Appearance">
+        <div style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {THEMES.map(t => {
+            const on = theme === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTheme(t.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+                  padding: '9px 11px', borderRadius: 14, cursor: 'pointer', transition: 'background 0.15s',
+                  background: on ? 'var(--accent-blue-dim)' : 'var(--bg-tertiary)',
+                  border: on ? '1px solid var(--accent-blue)' : '1px solid var(--border-subtle)',
+                }}
+                onMouseEnter={e => { if (!on) e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
+                onMouseLeave={e => { if (!on) e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
+              >
+                <span style={{ position: 'relative', flexShrink: 0, width: 34, height: 34, borderRadius: 11, overflow: 'hidden', background: t.swatchBg, border: '1px solid rgba(255,255,255,.14)' }}>
+                  <span style={{ position: 'absolute', left: 5, right: 5, top: 7, height: 8, borderRadius: 4, background: 'rgba(255,255,255,.22)' }} />
+                  <span style={{ position: 'absolute', left: 5, bottom: 6, width: 13, height: 6, borderRadius: 3, background: t.swatchAccent }} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: on ? 'var(--accent-blue)' : 'var(--text-primary)' }}>{t.label}</span>
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.35 }}>{t.note}</span>
+                </span>
+                {on && <span style={{ fontSize: 12, color: 'var(--accent-blue)', flexShrink: 0 }}>●</span>}
+              </button>
+            );
+          })}
+        </div>
+        <Row label="Glass blur" description="Intensity of the frosted-glass blur behind every panel." last>
+          <div style={{ display: 'flex', gap: 4, padding: 3, background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)' }}>
+            {BLUR_STEPS.map(b => (
+              <button key={b.id} onClick={() => setBlurIntensity(b.id)} style={{
+                background: blurIntensity === b.id ? 'var(--accent-blue)' : 'transparent',
+                color: blurIntensity === b.id ? 'white' : 'var(--text-muted)',
                 border: 'none', borderRadius: 'calc(var(--radius-md) - 2px)',
-                padding: '6px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                padding: '6px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 500,
                 fontFamily: 'var(--font-body)', transition: 'all 0.15s',
-              }}>{t === 'light' ? '☀️ Light' : '🌙 Dark'}</button>
+              }}>{b.label}</button>
             ))}
           </div>
         </Row>

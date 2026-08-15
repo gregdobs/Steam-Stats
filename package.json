@@ -17,7 +17,8 @@
     "start": "concurrently \"npm run server\" \"vite --port 5173\"",
     "build:exe": "npm run build && pkg . --output 'dist-exe/Steam Stats'",
     "build:exe:win": "npm run build && pkg . --target node22-win-x64 --output 'dist-exe/Steam Stats.exe'",
-    "build:release": "node build-release.js"
+    "build:release": "node build-release.js",
+    "test": "vitest run"
   },
   "bin": "bootstrap.cjs",
   "pkg": {
@@ -43,6 +44,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
     "@yao-pkg/pkg": "^6.21.0",
-    "vite": "^5.3.1"
+    "vite": "^5.3.1",
+    "vitest": "^4.1.10"
   }
 }

@@ -1,35 +1,38 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
 import {
-  computeBacklogProjection, computeBacklogMomentum, computeBacklogByGenre, computeBacklogGraveyard,
-  classifyGameStatus, formatHours, minutesToHours, fetchGenres,
+  computeBacklogProjection, computeBacklogMomentum, computeBacklogByGenre,
+  computeDormantLongest, getUnplayedCountSeries,
+  classifyGameStatus, formatHours, formatLastPlayed, minutesToHours, fetchGenres,
 } from '../utils/steam.js';
 import { GameHeader } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
-import { ProgressRing, categoryColor, PageHeader } from '../components/designSystem.jsx';
+import { ProgressRing, categoryColor, PageHeader, SectionHeading } from '../components/designSystem.jsx';
 
 // ── The 7-bucket spectrum every owned game falls into exactly once ─────────
 // 'unplayed' needs no HLTB data (playtime alone). 'unmatched' is playtime > 0
 // with no HLTB estimate yet — either still loading or genuinely no match.
-// The other 5 mirror getCompletionStatus()'s existing ratio tiers.
+// The other 5 are recolored on a cool-to-warm ramp (barely started = coolest
+// blue, overplayer = warmest rose) rather than the semantic accent set,
+// independent of theme accent.
 const STATUS_ORDER = ['unplayed', 'unmatched', 'barely', 'inprogress', 'gettingthere', 'completed', 'overplayer'];
 const STATUS_META = {
-  unplayed:     { label: 'Unplayed',       color: 'var(--text-muted)',     icon: '📥' },
-  unmatched:    { label: 'No Estimate',    color: 'var(--text-muted)',     icon: '❔' },
-  barely:       { label: 'Barely Started', color: 'var(--accent-rose)',    icon: '💤' },
-  inprogress:   { label: 'In Progress',    color: 'var(--accent-blue)',    icon: '🎮' },
-  gettingthere: { label: 'Getting There',  color: 'var(--accent-amber)',   icon: '🔥' },
-  completed:    { label: 'Completed',      color: 'var(--accent-emerald)', icon: '🏁' },
-  overplayer:   { label: 'Overplayer',     color: 'var(--accent-violet)',  icon: '🐙' },
+  unplayed:     { label: 'Unplayed',       color: 'var(--ss-ink4)', icon: '📥' },
+  unmatched:    { label: 'No Estimate',    color: 'var(--ss-ink4)', icon: '❔' },
+  barely:       { label: 'Barely Started', color: '#6fc8f7',        icon: '💤' },
+  inprogress:   { label: 'In Progress',    color: '#7fe3c4',        icon: '🎮' },
+  gettingthere: { label: 'Getting There',  color: '#f2c94c',        icon: '🔥' },
+  completed:    { label: 'Completed',      color: '#f2994a',        icon: '🏁' },
+  overplayer:   { label: 'Overplayer',     color: '#f2789a',        icon: '🐙' },
 };
 
 // ── Severity tiers for the burn-down projection ─────────────────────────────
 const getTier = (years) => {
-  if (years < 1)  return { label: 'Very manageable',  emoji: '😌', color: 'var(--accent-emerald)' };
-  if (years < 5)  return { label: 'A commitment',      emoji: '🤔', color: 'var(--accent-blue)' };
-  if (years < 15) return { label: 'A lifestyle choice', emoji: '😅', color: 'var(--accent-amber)' };
-  if (years < 50) return { label: 'Generational',       emoji: '😰', color: 'var(--accent-rose)' };
-  return { label: 'Outlives the sun', emoji: '💀', color: 'var(--accent-violet)' };
+  if (years < 1)  return { label: 'Very manageable',  emoji: '😌', color: '#7fe3c4' };
+  if (years < 5)  return { label: 'A commitment',      emoji: '🤔', color: 'var(--ss-accent)' };
+  if (years < 15) return { label: 'A lifestyle choice', emoji: '😅', color: '#f2c94c' };
+  if (years < 50) return { label: 'Generational',       emoji: '😰', color: '#f2789a' };
+  return { label: 'Outlives the sun', emoji: '💀', color: '#b79bf5' };
 };
 
 function getGenreColor(genre) {
@@ -41,7 +44,7 @@ function getGenreColor(genre) {
 // ── Status spectrum — one bar spanning the whole library, click to filter ──
 function StatusSpectrum({ counts, total, activeStatus, onFilter }) {
   return (
-    <div className="card" style={{ padding: 24, marginBottom: 20 }}>
+    <div className="ss-panel">
       <div style={{ display: 'flex', gap: 3, height: 20, borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
         {STATUS_ORDER.map(id => {
           const count = counts[id] || 0;
@@ -76,8 +79,8 @@ function StatusSpectrum({ counts, total, activeStatus, onFilter }) {
               }}
             >
               <span style={{ width: 9, height: 9, borderRadius: 3, background: STATUS_META[id].color, flexShrink: 0 }} />
-              <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{STATUS_META[id].icon} {STATUS_META[id].label}</span>
-              <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: 'var(--font-display)', color: isSel ? STATUS_META[id].color : 'var(--text-muted)' }}>{counts[id]}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--ss-ink2)' }}>{STATUS_META[id].icon} {STATUS_META[id].label}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: isSel ? STATUS_META[id].color : 'var(--ss-ink3)' }}>{counts[id]}</span>
             </button>
           );
         })}
@@ -86,28 +89,56 @@ function StatusSpectrum({ counts, total, activeStatus, onFilter }) {
   );
 }
 
-// ── Backlog graveyard ────────────────────────────────────────────────────────
-function BacklogGraveyard({ unplayedGames, steamId }) {
-  const graveyard = computeBacklogGraveyard(unplayedGames, steamId).slice(0, 8);
-  if (graveyard.length === 0) return null;
+// ── Momentum sparkline — 14-day unplayed-count bar strip ───────────────────
+function MomentumSparkline({ series }) {
+  const withData = series.filter(d => d.count != null);
+  if (withData.length < 2) return null;
+  const max = Math.max(...withData.map(d => d.count), 1);
+  const min = Math.min(...withData.map(d => d.count));
 
   return (
-    <div className="card" style={{ padding: 24, marginBottom: 24 }}>
-      <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Backlog Graveyard</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 18 }}>
-        Longest tracked as unplayed — since Steam Stats started watching, not necessarily since you bought them.
+    <div style={{ marginTop: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 40 }}>
+        {series.map((d, i) => {
+          if (d.count == null) return <div key={i} style={{ flex: 1 }} />;
+          const range = Math.max(max - min, 1);
+          const h = Math.max(3, Math.round(((d.count - min) / range) * 36) + 4);
+          return (
+            <div key={i} title={`${d.count} unplayed`} style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end' }}>
+              <div style={{ width: '100%', borderRadius: 3, height: h, background: 'var(--ss-chart-fill)' }} />
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 10, color: 'var(--ss-ink4)' }}>
+        <span>14 days ago</span><span>Today</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Dormant longest — played then abandoned, ranked by last-played recency ─
+function DormantLongest({ dormant }) {
+  if (dormant.length === 0) return null;
+
+  return (
+    <div className="ss-panel">
+      <SectionHeading title="Dormant longest" />
+      <p style={{ fontSize: 12, color: 'var(--ss-ink3)', marginTop: -12, marginBottom: 18 }}>
+        Games with real playtime that have gone quiet — ranked by days since you last opened them.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {graveyard.map((g, i) => (
-          <div key={g.appid} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderBottom: i < graveyard.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 12, color: 'var(--text-muted)', width: 18, flexShrink: 0 }}>{i + 1}</span>
-            <div style={{ width: 54, height: 26, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: 'var(--bg-tertiary)' }}>
+        {dormant.map((g, i) => (
+          <div key={g.appid} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderBottom: i < dormant.length - 1 ? '1px solid var(--ss-line-soft)' : 'none' }}>
+            <span style={{ fontSize: 12, color: 'var(--ss-ink3)', width: 18, flexShrink: 0 }}>{i + 1}</span>
+            <div style={{ width: 54, height: 26, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: 'var(--ss-inset)' }}>
               <GameHeader appId={g.appid} name={g.name} />
             </div>
-            <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-amber)', flexShrink: 0 }}>
-              {g.daysTracked === 0 ? 'New' : `${g.daysTracked}d`}
-            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, color: 'var(--ss-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--ss-ink4)' }}>{formatHours(g.playtime_forever)} lifetime</div>
+            </div>
+            <span style={{ fontSize: 12, color: '#f2c94c', flexShrink: 0 }}>{formatLastPlayed(g.rtime_last_played)}</span>
           </div>
         ))}
       </div>
@@ -121,24 +152,24 @@ function BacklogByGenre({ unplayedGames, genreData, loadStatus }) {
   const maxCount = Math.max(...byGenre.map(([, c]) => c), 1);
 
   return (
-    <div className="card" style={{ padding: 24, marginBottom: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Backlog by Genre</h3>
-        {loadStatus.pending > 0 && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Loading…</span>}
+    <div className="ss-panel">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <SectionHeading title="Backlog by genre" />
+        {loadStatus.pending > 0 && <span style={{ fontSize: 11, color: 'var(--ss-ink3)', marginLeft: 12, flexShrink: 0 }}>Loading…</span>}
       </div>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 18 }}>Which genres are piling up unplayed.</p>
+      <p style={{ fontSize: 12, color: 'var(--ss-ink3)', marginTop: -12, marginBottom: 18 }}>Which genres are piling up unplayed.</p>
 
       {byGenre.length === 0 ? (
-        <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No genre data yet.</div>
+        <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--ss-ink3)', fontSize: 13 }}>No genre data yet.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
           {byGenre.map(([genre, count]) => (
             <div key={genre} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)', width: 130, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{genre}</span>
-              <div style={{ flex: 1, height: 8, background: 'var(--border-default)', borderRadius: 99, overflow: 'hidden' }}>
+              <span style={{ fontSize: 12, color: 'var(--ss-ink2)', width: 130, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{genre}</span>
+              <div style={{ flex: 1, height: 8, background: 'var(--ss-track)', borderRadius: 99, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${(count / maxCount) * 100}%`, background: getGenreColor(genre), borderRadius: 99, transition: 'width 0.5s ease' }} />
               </div>
-              <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-display)', color: getGenreColor(genre), width: 22, textAlign: 'right', flexShrink: 0 }}>{count}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: getGenreColor(genre), width: 22, textAlign: 'right', flexShrink: 0 }}>{count}</span>
             </div>
           ))}
         </div>
@@ -156,21 +187,19 @@ function SpotlightCard({ game, hltbData, onClick, isSelected }) {
 
   return (
     <div
-      className="card"
-      style={{ overflow: 'hidden', cursor: 'pointer', border: isSelected ? '1px solid var(--accent-blue)' : undefined, transition: 'transform 0.2s, box-shadow 0.2s' }}
+      className="ss-panel"
+      style={{ padding: 0, overflow: 'hidden', cursor: 'pointer', border: isSelected ? '1px solid var(--ss-accent)' : undefined }}
       onClick={(e) => onClick?.(game, e)}
-      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; }}
-      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
     >
-      <div style={{ height: 130, position: 'relative', overflow: 'hidden', background: 'var(--bg-tertiary)' }}>
+      <div style={{ height: 130, position: 'relative', overflow: 'hidden', background: 'var(--ss-inset)' }}>
         <GameHeader appId={game.appid} name={game.name} />
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 55%, transparent 100%)' }} />
-        <div style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(0,0,0,0.55)', borderRadius: '50%', padding: 2 }}>
-          <ProgressRing pct={pct ?? 0} size={48} color={status?.color || 'var(--accent-blue)'} />
+        <div style={{ position: 'absolute', inset: 0, background: 'var(--ss-scrim)' }} />
+        <div style={{ position: 'absolute', top: 10, left: 10, background: 'var(--ss-inset)', borderRadius: '50%', padding: 2 }}>
+          <ProgressRing pct={pct ?? 0} size={48} color={status?.color || 'var(--ss-accent)'} textColor="var(--ss-ink)" />
         </div>
         <div style={{ position: 'absolute', bottom: 10, left: 12, right: 12 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{game.name}</div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)' }}>{status?.icon} {status?.label} · {formatHours(game.playtime_forever)}</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ss-ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{game.name}</div>
+          <div style={{ fontSize: 12, color: 'var(--ss-ink2)' }}>{status?.icon} {status?.label} · {formatHours(game.playtime_forever)}</div>
         </div>
       </div>
     </div>
@@ -182,9 +211,6 @@ function GameStatusCard({ game, hltbData, onClick, isSelected }) {
   const statusId = classifyGameStatus(game, hltbData);
   const meta = STATUS_META[statusId];
   const steamHours = minutesToHours(game.playtime_forever);
-  // Only meaningful once a game's actually been started — an unplayed game
-  // with an HLTB match would otherwise show a redundant "0%" next to its
-  // "~Xh" estimate.
   const pct = (statusId !== 'unplayed' && hltbData && !hltbData.error && hltbData.mainStory)
     ? Math.min(Math.round((steamHours / hltbData.mainStory) * 100), 200)
     : null;
@@ -192,20 +218,18 @@ function GameStatusCard({ game, hltbData, onClick, isSelected }) {
   return (
     <div
       onClick={(e) => onClick?.(game, e)}
-      className="card"
+      className="ss-panel"
       style={{
-        overflow: 'hidden', cursor: 'pointer', transition: 'all 0.15s',
-        border: isSelected ? '1px solid var(--accent-blue)' : undefined,
-        background: isSelected ? 'var(--accent-blue-dim)' : undefined,
+        padding: 0, overflow: 'hidden', cursor: 'pointer',
+        border: isSelected ? '1px solid var(--ss-accent)' : undefined,
+        background: isSelected ? 'var(--ss-pill-bg)' : undefined,
       }}
-      onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; } }}
-      onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; } }}
     >
-      <div style={{ height: 70, background: 'var(--bg-tertiary)', overflow: 'hidden' }}>
+      <div style={{ height: 70, background: 'var(--ss-inset)', overflow: 'hidden' }}>
         <GameHeader appId={game.appid} name={game.name} />
       </div>
       <div style={{ padding: '9px 11px' }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: isSelected ? 'var(--accent-blue)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 4 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: isSelected ? 'var(--ss-accent)' : 'var(--ss-ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 4 }}>
           {game.name}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
@@ -214,7 +238,7 @@ function GameStatusCard({ game, hltbData, onClick, isSelected }) {
             {statusId === 'unplayed' && hltbData?.mainStory ? ` · ~${hltbData.mainStory}h` : ''}
             {statusId === 'unmatched' && hltbData === undefined ? ' · loading…' : ''}
           </span>
-          {pct !== null && <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-display)', color: meta.color }}>{pct > 200 ? '200%+' : `${pct}%`}</span>}
+          {pct !== null && <span style={{ fontSize: 11, fontWeight: 600, color: meta.color }}>{pct > 200 ? '200%+' : `${pct}%`}</span>}
         </div>
       </div>
     </div>
@@ -231,20 +255,16 @@ export default function Progress() {
   const [sortBy, setSortBy] = useState('status');
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
   const [selectedGame, setSelectedGame] = useState(null);
-  const [anchorRect, setAnchorRect] = useState(null);
 
   const projection = computeBacklogProjection(ownedGames, steamId, hltbCache);
   const unplayedGames = projection.unplayedGames || ownedGames.filter(g => !g.playtime_forever);
   const momentum = computeBacklogMomentum(ownedGames, steamId);
+  const momentumSeries = steamId ? getUnplayedCountSeries(steamId, 14) : [];
 
-  // Every OTHER owned game, not just those with > 60 minutes — this is what
-  // closes the old coverage gap (games with 1-59 minutes played satisfied
-  // neither Backlog's `=== 0` nor Completion's `> 60` check).
   const playedGames = [...ownedGames].filter(g => g.playtime_forever > 0).sort((a, b) => b.playtime_forever - a.playtime_forever);
   const visiblePlayed = playedGames.slice(0, visibleCount);
   const hasMorePlayed = visibleCount < playedGames.length;
 
-  // Fetch genres for unplayed games (Backlog-by-genre breakdown)
   useEffect(() => {
     if (unplayedGames.length === 0) return;
     let cancelled = false;
@@ -269,7 +289,6 @@ export default function Progress() {
     return () => { cancelled = true; };
   }, [unplayedGames.length]);
 
-  // Progressively fetch HLTB for unplayed games (burn-down accuracy)
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -284,8 +303,6 @@ export default function Progress() {
     return () => { cancelled = true; };
   }, [unplayedGames.length]);
 
-  // Progressively fetch HLTB for visible played games — every game with any
-  // playtime is eligible now, not just > 60 minutes.
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -300,12 +317,10 @@ export default function Progress() {
     return () => { cancelled = true; };
   }, [visibleCount, ownedGames.length]);
 
-  const handleSelect = useCallback((game, e) => {
-    if (selectedGame?.appid === game.appid) { setSelectedGame(null); setAnchorRect(null); }
-    else { setSelectedGame(game); setAnchorRect(e?.currentTarget?.getBoundingClientRect() ?? null); }
-  }, [selectedGame]);
+  const handleSelect = useCallback((game) => {
+    setSelectedGame(prev => prev?.appid === game.appid ? null : game);
+  }, []);
 
-  // Classify everything currently known (all unplayed + visible played)
   const classified = [...unplayedGames, ...visiblePlayed].map(g => ({
     ...g, statusId: classifyGameStatus(g, hltbCache[g.name]),
   }));
@@ -335,115 +350,121 @@ export default function Progress() {
       const bh = hltbCache[b.name]?.mainStory ?? 999;
       return ah - bh;
     }
-    // 'status' — least-done to most-done
     return STATUS_ORDER.indexOf(a.statusId) - STATUS_ORDER.indexOf(b.statusId);
   });
 
   const { unplayedCount, avgWeeklyHours, totalHoursNeeded, weeksNeeded, yearsNeeded, gamesWithRealEstimate } = projection;
   const tier = avgWeeklyHours ? getTier(yearsNeeded) : null;
   const totalKnown = classified.length;
+  const playedCount = ownedGames.filter(g => g.playtime_forever > 0).length;
+  const clearedPct = ownedGames.length > 0 ? Math.round((playedCount / ownedGames.length) * 100) : 0;
+  const dormant = computeDormantLongest(ownedGames).slice(0, 8);
 
   return (
-    <div style={{ padding: '56px 24px 96px', maxWidth: 1400, margin: '0 auto' }}>
-      <div style={{ marginBottom: 40 }}>
-        <PageHeader
-          eyebrow="Progress"
-          title={
-            <>
-              <span style={{ fontWeight: 600 }}>{unplayedCount.toLocaleString()} unplayed</span>,{' '}
-              <span style={{ fontWeight: 600 }}>{(statusCounts.completed || 0) + (statusCounts.overplayer || 0)} completed</span>{' '}
-              of {ownedGames.length.toLocaleString()} owned.
-            </>
-          }
-          subtitle="Where every game in your library sits, from untouched to overplayed — click any segment below to filter."
-        />
-      </div>
+    <div style={{ padding: '34px 26px 120px', maxWidth: 1240, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
+      <PageHeader
+        eyebrow="Progress"
+        title={
+          <>
+            <span style={{ fontWeight: 600 }}>{unplayedCount.toLocaleString()} unplayed</span>,{' '}
+            <span style={{ fontWeight: 600 }}>{(statusCounts.completed || 0) + (statusCounts.overplayer || 0)} completed</span>{' '}
+            of {ownedGames.length.toLocaleString()} owned.
+          </>
+        }
+        subtitle="Where every game in your library sits, from untouched to overplayed — click any segment below to filter."
+      />
 
       <StatusSpectrum counts={statusCounts} total={totalKnown} activeStatus={activeStatus} onFilter={setActiveStatus} />
 
       {/* Burn-down + Momentum — scoped to the Unplayed bucket */}
-      <div style={{ display: 'grid', gridTemplateColumns: tier ? '2fr 1fr' : '1fr', gap: 20, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: tier ? 'minmax(0,2fr) minmax(0,1fr)' : '1fr', gap: 18 }}>
         {tier ? (
-          <div className="card" style={{ padding: 24 }}>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+          <div className="ss-panel">
+            <p style={{ fontSize: 12, color: 'var(--ss-ink3)', marginBottom: 16 }}>
               Projected at your current pace — a rough estimate, not a prediction.
             </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px', borderRadius: 'var(--radius-lg)', background: `color-mix(in srgb, ${tier.color} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${tier.color} 30%, transparent)` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: 20, borderRadius: 18, background: 'var(--ss-inset)', border: '1px solid var(--ss-line-soft)' }}>
+              <ProgressRing pct={clearedPct} size={64} color={tier.color} textColor="var(--ss-ink)" />
               <div style={{ fontSize: 44, flexShrink: 0 }}>{tier.emoji}</div>
               <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: tier.color, lineHeight: 1.1 }}>
+                <div style={{ fontSize: 28, fontWeight: 600, color: tier.color, lineHeight: 1.1 }}>
                   {yearsNeeded < 1 ? `${weeksNeeded} weeks` : `${yearsNeeded} years`}
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-                  to clear your backlog — <span style={{ color: tier.color, fontWeight: 600 }}>{tier.label}</span>
+                <div style={{ fontSize: 13, color: 'var(--ss-ink2)', marginTop: 2 }}>
+                  to clear your backlog — <span style={{ color: tier.color, fontWeight: 600 }}>{tier.label}</span> · {clearedPct}% cleared
                 </div>
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 16 }}>
-              <div style={{ padding: '10px 12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 3 }}>Current pace</div>
-                <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{avgWeeklyHours}h/wk</div>
+              <div style={{ padding: '10px 12px', background: 'var(--ss-inset)', borderRadius: 14, border: '1px solid var(--ss-line-soft)' }}>
+                <div style={{ fontSize: 10, color: 'var(--ss-ink3)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>Current pace</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ss-ink)' }}>{avgWeeklyHours}h/wk</div>
               </div>
-              <div style={{ padding: '10px 12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 3 }}>Hours needed</div>
-                <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{totalHoursNeeded.toLocaleString()}h</div>
+              <div style={{ padding: '10px 12px', background: 'var(--ss-inset)', borderRadius: 14, border: '1px solid var(--ss-line-soft)' }}>
+                <div style={{ fontSize: 10, color: 'var(--ss-ink3)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>Hours needed</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ss-ink)' }}>{totalHoursNeeded.toLocaleString()}h</div>
               </div>
-              <div style={{ padding: '10px 12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 3 }}>Real estimates</div>
-                <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--accent-blue)' }}>{gamesWithRealEstimate}/{unplayedCount}</div>
+              <div style={{ padding: '10px 12px', background: 'var(--ss-inset)', borderRadius: 14, border: '1px solid var(--ss-line-soft)' }}>
+                <div style={{ fontSize: 10, color: 'var(--ss-ink3)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>Real estimates</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ss-accent)' }}>{gamesWithRealEstimate}/{unplayedCount}</div>
               </div>
             </div>
-            <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 12, fontStyle: 'italic' }}>
+            <p style={{ fontSize: 10.5, color: 'var(--ss-ink4)', marginTop: 12, fontStyle: 'italic' }}>
               {gamesWithRealEstimate > 0
                 ? `Uses real HowLongToBeat "Main Story" estimates for ${gamesWithRealEstimate} game${gamesWithRealEstimate !== 1 ? 's' : ''}; assumes 8h for the rest while their data loads.`
                 : 'Using a flat 8h/game estimate — real HowLongToBeat data will refine this as it loads in the background.'}
             </p>
           </div>
         ) : unplayedCount > 0 ? (
-          <div className="card" style={{ padding: 24 }}>
-            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Backlog Burn-down</h3>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 28, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--accent-amber)' }}>{unplayedCount}</span>
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>unplayed games</span>
+          <div className="ss-panel">
+            <SectionHeading title="Backlog burn-down" />
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: -6, marginBottom: 10 }}>
+              <span style={{ fontSize: 28, fontWeight: 600, color: '#f2c94c' }}>{unplayedCount}</span>
+              <span style={{ fontSize: 13, color: 'var(--ss-ink3)' }}>unplayed games</span>
             </div>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{projection.message}</p>
+            <p style={{ fontSize: 13, color: 'var(--ss-ink3)' }}>{projection.message}</p>
           </div>
         ) : (
-          <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+          <div className="ss-panel" style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No backlog — every game has been played at least once.</p>
+            <p style={{ fontSize: 13, color: 'var(--ss-ink3)' }}>No backlog — every game has been played at least once.</p>
           </div>
         )}
 
         {unplayedCount > 0 && (
-          <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 10 }}>Backlog Momentum</div>
+          <div className="ss-panel" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--ss-ink3)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>Backlog Momentum</div>
             {momentum ? (
               <>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontSize: 32, fontWeight: 700, fontFamily: 'var(--font-display)', color: momentum.delta > 0 ? 'var(--accent-rose)' : momentum.delta < 0 ? 'var(--accent-emerald)' : 'var(--text-muted)' }}>
+                  <span style={{ fontSize: 32, fontWeight: 600, color: momentum.delta > 0 ? '#f2789a' : momentum.delta < 0 ? '#7fe3c4' : 'var(--ss-ink3)' }}>
                     {momentum.delta > 0 ? '+' : ''}{momentum.delta}
                   </span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>games</span>
+                  <span style={{ fontSize: 12, color: 'var(--ss-ink3)' }}>games</span>
                 </div>
-                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+                <p style={{ fontSize: 12, color: 'var(--ss-ink2)', marginTop: 6 }}>
                   {momentum.delta > 0 ? '📈 Growing' : momentum.delta < 0 ? '📉 Shrinking' : '➡️ Steady'} over the last {momentum.days} days
                 </p>
+                <MomentumSparkline series={momentumSeries} />
               </>
             ) : (
-              <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Building history — check back after a few days of use for a trend.</p>
+              <p style={{ fontSize: 12, color: 'var(--ss-ink3)' }}>Building history — check back after a few days of use for a trend.</p>
             )}
           </div>
         )}
       </div>
 
-      {unplayedCount > 0 && <BacklogGraveyard unplayedGames={unplayedGames} steamId={steamId} />}
-      {unplayedCount > 0 && <BacklogByGenre unplayedGames={unplayedGames} genreData={genreData} loadStatus={loadStatus} />}
+      {(dormant.length > 0 || unplayedCount > 0) && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 18 }}>
+          <DormantLongest dormant={dormant} />
+          {unplayedCount > 0 && <BacklogByGenre unplayedGames={unplayedGames} genreData={genreData} loadStatus={loadStatus} />}
+        </div>
+      )}
 
       {/* Spotlight — furthest along, scoped to games with a real HLTB match */}
       {!activeStatus && spotlightGames.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--ss-ink3)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 12 }}>
             Furthest along
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
@@ -458,19 +479,14 @@ export default function Progress() {
       )}
 
       {/* Full list */}
-      <div className="card" style={{ padding: 24 }}>
+      <div className="ss-panel">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-            {activeStatus ? STATUS_META[activeStatus].label : 'Everything else'} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({listGames.length})</span>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--ss-ink)' }}>
+            {activeStatus ? STATUS_META[activeStatus].label : 'Everything else'} <span style={{ color: 'var(--ss-ink3)', fontWeight: 400 }}>({listGames.length})</span>
           </h3>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {[['status', 'By Status'], ['shortest', 'Shortest First'], ['hours', 'Most Playtime'], ['alpha', 'A–Z']].map(([key, label]) => (
-              <button key={key} onClick={() => setSortBy(key)} className="btn btn-ghost" style={{
-                fontSize: 12, padding: '5px 12px',
-                background: sortBy === key ? 'var(--accent-blue-dim)' : undefined,
-                color: sortBy === key ? 'var(--accent-blue)' : undefined,
-                borderColor: sortBy === key ? 'var(--accent-blue)' : undefined,
-              }}>{label}</button>
+              <button key={key} onClick={() => setSortBy(key)} className={`ss-pill${sortBy === key ? ' active' : ''}`}>{label}</button>
             ))}
           </div>
         </div>
@@ -486,10 +502,10 @@ export default function Progress() {
 
         {hasMorePlayed && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginTop: 24, padding: '16px 0 0' }}>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            <p style={{ fontSize: 13, color: 'var(--ss-ink3)' }}>
               {visiblePlayed.length} of {playedGames.length} played games classified so far
             </p>
-            <button className="btn btn-primary" onClick={() => setVisibleCount(c => c + BATCH_SIZE)} style={{ fontSize: 13 }}>
+            <button className="ss-pill" onClick={() => setVisibleCount(c => c + BATCH_SIZE)} style={{ fontSize: 13, padding: '8px 18px' }}>
               Load {Math.min(BATCH_SIZE, playedGames.length - visibleCount)} More
             </button>
           </div>
@@ -501,8 +517,7 @@ export default function Progress() {
           game={selectedGame}
           achData={achCache[selectedGame.appid]}
           hltbData={hltbCache[selectedGame.name]}
-          anchorRect={anchorRect}
-          onClose={() => { setSelectedGame(null); setAnchorRect(null); }}
+          onClose={() => setSelectedGame(null)}
         />
       )}
     </div>

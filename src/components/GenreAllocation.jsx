@@ -1,17 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
 import { fetchGenres, loadSnapshots, formatHours } from '../utils/steam.js';
-import { categoryColor } from './designSystem.jsx';
+import { categoryColor, SectionHeading } from './designSystem.jsx';
 
 // Stable per-genre color: hashed by name (not by sort rank, which shifts as
-// hour totals change) into the shared 5-color warm palette.
+// hour totals change) into the shared categorical palette.
 function getColor(genre) {
   let hash = 0;
   for (let i = 0; i < genre.length; i++) hash = (hash * 31 + genre.charCodeAt(i)) | 0;
   return categoryColor(Math.abs(hash));
 }
 
-export default function GenreAllocation() {
+export default function GenreAllocation({ activeFilter, onFilter }) {
   const { ownedGames, steamId } = useApp();
   const [genreData, setGenreData] = useState({});
   const [loadStatus, setLoadStatus] = useState({ cached: 0, pending: 0 });
@@ -93,41 +93,48 @@ export default function GenreAllocation() {
   const isLoading = loadStatus.pending > 0;
   const noDataYet = sortedGenres.length === 0 && !isLoading;
 
+  const selectedGenre = activeFilter?.type === 'genre' ? activeFilter.value : null;
+
+  const toggleGenre = (genre) => {
+    if (!onFilter) return;
+    if (selectedGenre === genre) { onFilter(null); return; }
+    const appids = playedGames.filter(g => genreData[g.appid]?.genres?.includes(genre)).map(g => g.appid);
+    onFilter({ type: 'genre', value: genre, label: genre, appids, color: getColor(genre) });
+  };
+
   return (
-    <div className="card" style={{ padding: 24, marginBottom: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-          Genre Allocation
-        </h3>
+    <div className="ss-panel">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <SectionHeading title="Genre allocation" />
         {isLoading && (
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: 11, color: 'var(--ss-ink3)', marginLeft: 12, flexShrink: 0 }}>
             Loading genres… {loadStatus.cached} cached, {loadStatus.pending} pending
           </span>
         )}
       </div>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-        How your all-time hours split across genres. Games with multiple genres split their hours evenly.
+      <p style={{ fontSize: 12, color: 'var(--ss-ink3)', marginTop: -12, marginBottom: 18 }}>
+        How your all-time hours split across genres. Click a segment to filter the table below.
       </p>
 
       {sortedGenres.length > 0 && (
         <div style={{ display: 'flex', gap: 20, marginBottom: 20, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 3 }}>Top Genre</div>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-display)', color: getColor(sortedGenres[0][0]) }}>{sortedGenres[0][0]}</div>
+            <div style={{ fontSize: 10, color: 'var(--ss-ink3)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>Top Genre</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: getColor(sortedGenres[0][0]) }}>{sortedGenres[0][0]}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 3 }}>Hours in it</div>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{formatHours(sortedGenres[0][1])}</div>
+            <div style={{ fontSize: 10, color: 'var(--ss-ink3)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>Hours in it</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ss-ink)' }}>{formatHours(sortedGenres[0][1])}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 3 }}>Genres tracked</div>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>{sortedGenres.length}</div>
+            <div style={{ fontSize: 10, color: 'var(--ss-ink3)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>Genres tracked</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ss-ink)' }}>{sortedGenres.length}</div>
           </div>
         </div>
       )}
 
       {noDataYet && (
-        <div style={{ padding: '30px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+        <div style={{ padding: '30px 0', textAlign: 'center', color: 'var(--ss-ink3)', fontSize: 13 }}>
           No genre data available yet.
         </div>
       )}
@@ -135,21 +142,25 @@ export default function GenreAllocation() {
       {sortedGenres.length > 0 && (
         <>
           {/* Horizontal stacked bar */}
-          <div style={{ display: 'flex', height: 28, borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 16 }}>
+          <div style={{ display: 'flex', height: 28, borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
             {sortedGenres.map(([genre, minutes]) => {
               const pct = (minutes / totalCategorizedMinutes) * 100;
               const isHovered = hoveredGenre === genre;
+              const isSel = selectedGenre === genre;
               return (
                 <div
                   key={genre}
+                  onClick={() => toggleGenre(genre)}
                   onMouseEnter={() => setHoveredGenre(genre)}
                   onMouseLeave={() => setHoveredGenre(null)}
                   style={{
                     width: `${pct}%`,
                     background: getColor(genre),
-                    opacity: hoveredGenre && !isHovered ? 0.4 : 1,
+                    opacity: selectedGenre ? (isSel ? 1 : 0.3) : (hoveredGenre && !isHovered ? 0.4 : 1),
+                    outline: isSel ? '2px solid var(--ss-hi)' : 'none',
+                    outlineOffset: -2,
                     transition: 'opacity 0.15s',
-                    cursor: 'default',
+                    cursor: onFilter ? 'pointer' : 'default',
                     minWidth: pct > 0.5 ? 2 : 0,
                   }}
                   title={`${genre}: ${formatHours(minutes)} (${pct.toFixed(1)}%)`}
@@ -163,22 +174,25 @@ export default function GenreAllocation() {
             {sortedGenres.map(([genre, minutes]) => {
               const pct = (minutes / totalCategorizedMinutes) * 100;
               const isHovered = hoveredGenre === genre;
+              const isSel = selectedGenre === genre;
               return (
                 <div
                   key={genre}
+                  onClick={() => toggleGenre(genre)}
                   onMouseEnter={() => setHoveredGenre(genre)}
                   onMouseLeave={() => setHoveredGenre(null)}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '6px 8px', borderRadius: 'var(--radius-md)',
-                    background: isHovered ? 'var(--bg-tertiary)' : 'transparent',
+                    display: 'flex', alignItems: 'center', gap: 8, cursor: onFilter ? 'pointer' : 'default',
+                    padding: '6px 8px', borderRadius: 10,
+                    background: isSel ? 'var(--ss-pill-bg)' : isHovered ? 'var(--ss-btn)' : 'transparent',
+                    border: isSel ? '1px solid var(--ss-pill-line)' : '1px solid transparent',
                     transition: 'background 0.15s',
                   }}
                 >
                   <div style={{ width: 10, height: 10, borderRadius: 2, background: getColor(genre), flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{genre}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{formatHours(minutes)}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', width: 34, textAlign: 'right', flexShrink: 0 }}>{pct.toFixed(0)}%</span>
+                  <span style={{ fontSize: 12, color: 'var(--ss-ink2)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{genre}</span>
+                  <span style={{ fontSize: 11, color: 'var(--ss-ink3)', flexShrink: 0 }}>{formatHours(minutes)}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ss-ink)', width: 34, textAlign: 'right', flexShrink: 0 }}>{pct.toFixed(0)}%</span>
                 </div>
               );
             })}
@@ -187,7 +201,7 @@ export default function GenreAllocation() {
           {/* Trend over time — simple stacked mini bars per snapshot */}
           {recentTrend.length > 1 && (
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--ss-ink3)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>
                 Recent genre mix by session
               </div>
               <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 90 }}>
@@ -212,8 +226,8 @@ export default function GenreAllocation() {
                 })}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{new Date(recentTrend[0].timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{new Date(recentTrend[recentTrend.length - 1].timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                <span style={{ fontSize: 10, color: 'var(--ss-ink3)' }}>{new Date(recentTrend[0].timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                <span style={{ fontSize: 10, color: 'var(--ss-ink3)' }}>{new Date(recentTrend[recentTrend.length - 1].timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
               </div>
             </div>
           )}

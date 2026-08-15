@@ -5,6 +5,7 @@ import {
   saveSnapshot, loadSnapshots, mergeLocalData, computeHistoricalTrends, fetchHLTB,
   fetchAchievementsBatch
 } from '../utils/steam.js';
+import { THEME_BASE_BLUR, BLUR_MULTIPLIERS } from '../utils/themes.js';
 
 const AppContext = createContext(null);
 
@@ -13,7 +14,9 @@ const HLTB_CACHE_KEY = 'steam_dashboard_hltb_cache';
 // unlock time), used by the Achievement Rarity widget — bumped so older
 // cached entries that predate that field get refetched instead of being
 // treated as already-complete and silently missing rarity data forever.
-const ACH_CACHE_KEY = 'steam_dashboard_achievement_cache_v2';
+// v3: earnedDetails entries also carry `description`, used by the
+// achievement detail sheet — same reasoning, same fix.
+const ACH_CACHE_KEY = 'steam_dashboard_achievement_cache_v3';
 
 function loadHltbCacheFromStorage() {
   try { return JSON.parse(localStorage.getItem(HLTB_CACHE_KEY) || '{}'); }
@@ -36,11 +39,10 @@ function saveAchCacheToStorage(cache) {
 }
 
 export function AppProvider({ children }) {
-  const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('steam_theme');
-    if (saved) return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
+  // Three-way theme (dark/light/vapor) — dark is the design's stated default;
+  // a 3-way glass palette doesn't map cleanly onto a 2-way OS light/dark read.
+  const [theme, setTheme] = useState(() => localStorage.getItem('steam_theme') || 'dark');
+  const [blurIntensity, setBlurIntensity] = useState(() => localStorage.getItem('steam_blur_intensity') || 'standard');
 
   const [config, setConfig] = useState(() => loadConfig());
   const [activePage, setActivePage] = useState('dashboard');
@@ -130,10 +132,11 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    const blurPx = Math.round((THEME_BASE_BLUR[theme] ?? THEME_BASE_BLUR.dark) * (BLUR_MULTIPLIERS[blurIntensity] ?? 1));
+    document.documentElement.style.setProperty('--ss-blur', `${blurPx}px`);
     localStorage.setItem('steam_theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
+    localStorage.setItem('steam_blur_intensity', blurIntensity);
+  }, [theme, blurIntensity]);
 
   const loadData = useCallback(async (apiKey, steamUrl) => {
     setLoading(true);
@@ -279,7 +282,8 @@ export function AppProvider({ children }) {
 
   return (
     <AppContext.Provider value={{
-      theme, toggleTheme,
+      theme, setTheme,
+      blurIntensity, setBlurIntensity,
       config, setConfig,
       activePage, setActivePage,
       timePeriod, setTimePeriod,
