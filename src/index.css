@@ -71,6 +71,7 @@ a:hover{color:var(--ss-accent-txt);}
   --ss-pill2-bg: rgba(183,155,245,.13); --ss-pill2-line: rgba(183,155,245,.28); --ss-pill2-ink: #cdb9fa;
   --ss-accent: #6fc8f7; --ss-accent-txt: #a5dcfb;
   --ss-cat-1: #6fc8f7; --ss-cat-2: #b79bf5; --ss-cat-3: #7fe3c4; --ss-cat-4: #f2a35e; --ss-cat-5: #f2789a;
+  --ss-ramp-1: #6fc8f7; --ss-ramp-2: #7fd9ea; --ss-ramp-3: #7fe3c4; --ss-ramp-4: #f2c94c; --ss-ramp-5: #f2a35e; --ss-ramp-6: #f28a5a; --ss-ramp-7: #f2789a;
   --ss-blur: 30px;
   color-scheme: dark;
 }
@@ -93,6 +94,7 @@ a:hover{color:var(--ss-accent-txt);}
   --ss-pill2-bg: rgba(94,74,158,.1); --ss-pill2-line: rgba(94,74,158,.28); --ss-pill2-ink: #4c3c86;
   --ss-accent: #1178b3; --ss-accent-txt: #0f6fa8;
   --ss-cat-1: #1f8ecb; --ss-cat-2: #7c5cd6; --ss-cat-3: #1f9a6f; --ss-cat-4: #c2721a; --ss-cat-5: #c23d5a;
+  --ss-ramp-1: #1f8ecb; --ss-ramp-2: #1f9ab5; --ss-ramp-3: #1f9a6f; --ss-ramp-4: #b3901a; --ss-ramp-5: #c2721a; --ss-ramp-6: #c2571a; --ss-ramp-7: #c23d5a;
   --ss-blur: 26px;
   color-scheme: light;
 }
@@ -115,6 +117,7 @@ a:hover{color:var(--ss-accent-txt);}
   --ss-pill2-bg: rgba(183,155,245,.12); --ss-pill2-line: rgba(183,155,245,.26); --ss-pill2-ink: #d8c9ff;
   --ss-accent: #9fdcff; --ss-accent-txt: #bfe8ff;
   --ss-cat-1: #9fdcff; --ss-cat-2: #b79bf5; --ss-cat-3: #7fe3c4; --ss-cat-4: #f2a35e; --ss-cat-5: #f2789a;
+  --ss-ramp-1: #9fdcff; --ss-ramp-2: #8ff0e5; --ss-ramp-3: #7fe3c4; --ss-ramp-4: #f5d876; --ss-ramp-5: #f2a35e; --ss-ramp-6: #f2925a; --ss-ramp-7: #f2789a;
   --ss-blur: 46px;
   color-scheme: dark;
 }
@@ -138,6 +141,7 @@ a:hover{color:var(--ss-accent-txt);}
   --ss-pill2-bg: rgba(183,155,245,.14); --ss-pill2-line: rgba(183,155,245,.32); --ss-pill2-ink: #d8c9ff;
   --ss-accent: #8fd6ff; --ss-accent-txt: #bfe8ff;
   --ss-cat-1: #8fd6ff; --ss-cat-2: #b79bf5; --ss-cat-3: #7fe3c4; --ss-cat-4: #f2a35e; --ss-cat-5: #f2789a;
+  --ss-ramp-1: #8fd6ff; --ss-ramp-2: #7fdde0; --ss-ramp-3: #7fe3c4; --ss-ramp-4: #f2c94c; --ss-ramp-5: #f2a35e; --ss-ramp-6: #f2835f; --ss-ramp-7: #f2789a;
   --ss-blur: 4px;
   color-scheme: dark;
 }

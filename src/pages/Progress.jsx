@@ -7,32 +7,32 @@ import {
 } from '../utils/steam.js';
 import { GameHeader } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
-import { ProgressRing, categoryColor, PageHeader, SectionHeading } from '../components/designSystem.jsx';
+import { ProgressRing, categoryColor, rampColor, PageHeader, SectionHeading } from '../components/designSystem.jsx';
 
 // ── The 7-bucket spectrum every owned game falls into exactly once ─────────
 // 'unplayed' needs no HLTB data (playtime alone). 'unmatched' is playtime > 0
 // with no HLTB estimate yet — either still loading or genuinely no match.
-// The other 5 are recolored on a cool-to-warm ramp (barely started = coolest
-// blue, overplayer = warmest rose) rather than the semantic accent set,
-// independent of theme accent.
+// All 7 sit on the shared cool-to-warm ramp (unplayed = coolest blue,
+// overplayer = warmest rose), independent of theme accent, so no bucket —
+// including the two "no data yet" ones — falls back to a neutral grey.
 const STATUS_ORDER = ['unplayed', 'unmatched', 'barely', 'inprogress', 'gettingthere', 'completed', 'overplayer'];
 const STATUS_META = {
-  unplayed:     { label: 'Unplayed',       color: 'var(--ss-ink4)', icon: '📥' },
-  unmatched:    { label: 'No Estimate',    color: 'var(--ss-ink4)', icon: '❔' },
-  barely:       { label: 'Barely Started', color: '#6fc8f7',        icon: '💤' },
-  inprogress:   { label: 'In Progress',    color: '#7fe3c4',        icon: '🎮' },
-  gettingthere: { label: 'Getting There',  color: '#f2c94c',        icon: '🔥' },
-  completed:    { label: 'Completed',      color: '#f2994a',        icon: '🏁' },
-  overplayer:   { label: 'Overplayer',     color: '#f2789a',        icon: '🐙' },
+  unplayed:     { label: 'Unplayed',       color: rampColor(0), icon: '📥' },
+  unmatched:    { label: 'No Estimate',    color: rampColor(1), icon: '❔' },
+  barely:       { label: 'Barely Started', color: rampColor(2), icon: '💤' },
+  inprogress:   { label: 'In Progress',    color: rampColor(3), icon: '🎮' },
+  gettingthere: { label: 'Getting There',  color: rampColor(4), icon: '🔥' },
+  completed:    { label: 'Completed',      color: rampColor(5), icon: '🏁' },
+  overplayer:   { label: 'Overplayer',     color: rampColor(6), icon: '🐙' },
 };
 
 // ── Severity tiers for the burn-down projection ─────────────────────────────
 const getTier = (years) => {
-  if (years < 1)  return { label: 'Very manageable',  emoji: '😌', color: '#7fe3c4' };
+  if (years < 1)  return { label: 'Very manageable',  emoji: '😌', color: rampColor(2) };
   if (years < 5)  return { label: 'A commitment',      emoji: '🤔', color: 'var(--ss-accent)' };
-  if (years < 15) return { label: 'A lifestyle choice', emoji: '😅', color: '#f2c94c' };
-  if (years < 50) return { label: 'Generational',       emoji: '😰', color: '#f2789a' };
-  return { label: 'Outlives the sun', emoji: '💀', color: '#b79bf5' };
+  if (years < 15) return { label: 'A lifestyle choice', emoji: '😅', color: rampColor(4) };
+  if (years < 50) return { label: 'Generational',       emoji: '😰', color: rampColor(6) };
+  return { label: 'Outlives the sun', emoji: '💀', color: 'var(--ss-cat-2)' };
 };
 
 function getGenreColor(genre) {
@@ -140,7 +140,7 @@ function DormantLongest({ dormant }) {
               <div style={{ fontSize: 13, color: 'var(--ss-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</div>
               <div style={{ fontSize: 11, color: 'var(--ss-ink4)' }}>{formatHours(g.playtime_forever)} lifetime</div>
             </div>
-            <span style={{ fontSize: 12, color: '#f2c94c', flexShrink: 0 }}>{formatLastPlayed(g.rtime_last_played)}</span>
+            <span style={{ fontSize: 12, color: rampColor(4), flexShrink: 0 }}>{formatLastPlayed(g.rtime_last_played)}</span>
           </div>
         ))}
       </div>
@@ -390,8 +390,8 @@ export default function Progress() {
             </div>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 22, padding: '22px 24px', borderRadius: 20,
-              background: 'linear-gradient(155deg, rgba(183,155,245,.18), rgba(183,155,245,.05))',
-              border: '1px solid rgba(183,155,245,.3)', boxShadow: 'inset 0 1px 0 var(--ss-hi)',
+              background: 'linear-gradient(155deg, color-mix(in srgb, var(--ss-cat-2) 18%, transparent), color-mix(in srgb, var(--ss-cat-2) 5%, transparent))',
+              border: '1px solid color-mix(in srgb, var(--ss-cat-2) 30%, transparent)', boxShadow: 'inset 0 1px 0 var(--ss-hi)',
             }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 40, fontWeight: 500, lineHeight: 1, color: tier.color }}>
@@ -440,7 +440,7 @@ export default function Progress() {
           <div className="ss-panel">
             <SectionHeading title="Backlog burn-down" />
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: -6, marginBottom: 10 }}>
-              <span style={{ fontSize: 28, fontWeight: 600, color: '#f2c94c' }}>{unplayedCount}</span>
+              <span style={{ fontSize: 28, fontWeight: 600, color: rampColor(0) }}>{unplayedCount}</span>
               <span style={{ fontSize: 13, color: 'var(--ss-ink3)' }}>unplayed games</span>
             </div>
             <p style={{ fontSize: 13, color: 'var(--ss-ink3)' }}>{projection.message}</p>
@@ -458,7 +458,7 @@ export default function Progress() {
             {momentum ? (
               <>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontSize: 32, fontWeight: 600, color: momentum.delta > 0 ? '#f2789a' : momentum.delta < 0 ? '#7fe3c4' : 'var(--ss-ink3)' }}>
+                  <span style={{ fontSize: 32, fontWeight: 600, color: momentum.delta > 0 ? rampColor(6) : momentum.delta < 0 ? rampColor(2) : 'var(--ss-ink3)' }}>
                     {momentum.delta > 0 ? '+' : ''}{momentum.delta}
                   </span>
                   <span style={{ fontSize: 12, color: 'var(--ss-ink3)' }}>games</span>
@@ -530,8 +530,8 @@ export default function Progress() {
               onClick={() => setVisibleCount(c => c + BATCH_SIZE)}
               style={{
                 padding: '10px 20px', borderRadius: 16, cursor: 'pointer', fontSize: 13, color: 'var(--ss-ink)',
-                background: 'linear-gradient(160deg, rgba(111,200,247,.3), rgba(111,200,247,.12))',
-                border: '1px solid rgba(111,200,247,.4)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.22)',
+                background: 'linear-gradient(160deg, color-mix(in srgb, var(--ss-accent) 30%, transparent), color-mix(in srgb, var(--ss-accent) 12%, transparent))',
+                border: '1px solid color-mix(in srgb, var(--ss-accent) 40%, transparent)', boxShadow: 'inset 0 1px 0 var(--ss-hi)',
               }}
             >
               Load {Math.min(BATCH_SIZE, playedGames.length - visibleCount)} More

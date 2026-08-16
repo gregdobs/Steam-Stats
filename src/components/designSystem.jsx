@@ -27,6 +27,18 @@ export function categoryColor(i) {
   return CATEGORY_COLORS[i % CATEGORY_COLORS.length];
 }
 
+// 7-stop cool-to-warm ramp for ordered/intensity data (playtime buckets,
+// backlog status) — every stop is a real hue per theme via --ss-ramp-*, so
+// "lowest/none" and "highest" never fall back to a neutral grey swatch.
+export const RAMP_COLORS = [
+  'var(--ss-ramp-1)', 'var(--ss-ramp-2)', 'var(--ss-ramp-3)', 'var(--ss-ramp-4)',
+  'var(--ss-ramp-5)', 'var(--ss-ramp-6)', 'var(--ss-ramp-7)',
+];
+
+export function rampColor(i) {
+  return RAMP_COLORS[i % RAMP_COLORS.length];
+}
+
 export function SectionHeading({ title, trailing }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 20 }}>

@@ -4,17 +4,21 @@ import { formatHours, formatLastPlayed, daysSincePlayed, recencyBucket, RECENCY_
 import { GameHeader } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
 import GenreAllocation from '../components/GenreAllocation.jsx';
-import { chartRgba, categoryColor, PageHeader, SectionHeading, CrossFilterBanner } from '../components/designSystem.jsx';
+import GameHoverCard from '../components/GameHoverCard.jsx';
+import { chartRgba, rampColor, PageHeader, SectionHeading, CrossFilterBanner } from '../components/designSystem.jsx';
 
 // ── Colour tokens ──────────────────────────────────────────────────────────
+// Same cool-to-warm ramp Progress uses for its status spectrum — playtime
+// buckets are ordered/intensity data too, so every stop (including the
+// "never played" floor) gets a real hue instead of a neutral grey.
 const BUCKET_META = [
-  { key: 'Never played',   color: 'var(--ss-ink4)', min: 0,   max: 0    },
-  { key: '< 1 hour',       color: categoryColor(0), min: 0,   max: 1    },
-  { key: '1–10 hours',     color: categoryColor(1), min: 1,   max: 10   },
-  { key: '10–50 hours',    color: categoryColor(2), min: 10,  max: 50   },
-  { key: '50–200 hours',   color: categoryColor(3), min: 50,  max: 200  },
-  { key: '200–500 hours',  color: categoryColor(4), min: 200, max: 500  },
-  { key: '500+ hours',     color: 'var(--ss-ink)', min: 500, max: Infinity },
+  { key: 'Never played',   color: rampColor(0), min: 0,   max: 0    },
+  { key: '< 1 hour',       color: rampColor(1), min: 0,   max: 1    },
+  { key: '1–10 hours',     color: rampColor(2), min: 1,   max: 10   },
+  { key: '10–50 hours',    color: rampColor(3), min: 10,  max: 50   },
+  { key: '50–200 hours',   color: rampColor(4), min: 50,  max: 200  },
+  { key: '200–500 hours',  color: rampColor(5), min: 200, max: 500  },
+  { key: '500+ hours',     color: rampColor(6), min: 500, max: Infinity },
 ];
 
 function getBucket(game) {
@@ -163,6 +167,10 @@ function dotSize(game) {
 }
 
 function RecencyLanes({ games, activeFilter, onFilter }) {
+  const { achCache } = useApp();
+  const [hoverGame, setHoverGame] = useState(null);
+  const [hoverRect, setHoverRect] = useState(null);
+
   const played = games.filter(g => g.playtime_forever > 0);
   const lanes = RECENCY_BUCKETS.map(b => ({
     ...b,
@@ -173,6 +181,8 @@ function RecencyLanes({ games, activeFilter, onFilter }) {
 
   if (lanes.length === 0) return null;
   const MAX_DOTS = 24;
+
+  const clearHover = () => { setHoverGame(null); setHoverRect(null); };
 
   return (
     <div>
@@ -187,8 +197,9 @@ function RecencyLanes({ games, activeFilter, onFilter }) {
                 return (
                   <div
                     key={g.appid}
-                    onClick={() => onFilter(isSel ? null : { type: 'game', value: g.appid, label: g.name })}
-                    title={`${g.name} — ${formatHours(g.playtime_forever)}`}
+                    onClick={() => { clearHover(); onFilter(isSel ? null : { type: 'game', value: g.appid, label: g.name }); }}
+                    onMouseEnter={(e) => { setHoverGame(g); setHoverRect(e.currentTarget.getBoundingClientRect()); }}
+                    onMouseLeave={clearHover}
                     style={{
                       width: size, height: size, borderRadius: '50%', cursor: 'pointer',
                       background: isSel ? 'var(--ss-chart-hi)' : chartRgba(0.55),
@@ -207,6 +218,7 @@ function RecencyLanes({ games, activeFilter, onFilter }) {
           </div>
         ))}
       </div>
+      <GameHoverCard game={hoverGame} achData={hoverGame ? achCache[hoverGame.appid] : null} anchorRect={hoverRect} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--ss-line-soft)', fontSize: 11, color: 'var(--ss-ink4)' }}>
         <span>Dot size = lifetime hours</span>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: chartRgba(0.55) }} />
@@ -343,7 +355,7 @@ export default function Library() {
                 <div style={{ fontSize: 10, color: 'var(--ss-ink3)' }}>played</div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--ss-ink3)' }}>{neverPlayed}</div>
+                <div style={{ fontSize: 18, fontWeight: 600, color: rampColor(0) }}>{neverPlayed}</div>
                 <div style={{ fontSize: 10, color: 'var(--ss-ink3)' }}>untouched</div>
               </div>
             </div>
