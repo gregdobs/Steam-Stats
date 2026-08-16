@@ -89,18 +89,7 @@ Then open `http://steamstats.localhost:5173` as before. Each window needs Ctrl+C
 | http://steamstats.localhost:5173 | The dashboard — open this in your browser |
 | http://steamstats.localhost:3001 | API server — you never need to open this directly |
 
-Both are equally reachable as plain `http://localhost:5173` / `:3001` — `steamstats.localhost` is just the friendlier name the app itself uses (auto-opened by the packaged `.exe`, printed by the server on startup). See [Why `steamstats.localhost`?](#why-steamstatslocalhost) below if you're curious how that works without any setup.
-
----
-
-### Why `steamstats.localhost`?
-
-Every hostname ending in `.localhost` is reserved by [RFC 6761](https://datatracker.ietf.org/doc/html/rfc6761) to always mean "this machine," and every modern browser (Chrome, Edge, Firefox) resolves it straight to loopback for free — no hosts file edit, no admin rights, no per-machine setup step. That made it the right fit for a friendlier URL than `localhost:3001`, over the two more obvious-looking options:
-
-- **`.dev`** is a real, Google-owned public TLD that's on the browser [HSTS preload list](https://hstspreload.org/) — the entire TLD is forced to HTTPS. A plain `http://` address on `.dev` doesn't just look wrong, it fails outright with no working certificate to serve.
-- **`.local`** is reserved for mDNS/Bonjour service discovery, not general-purpose hostnames — it can resolve unpredictably (or not at all) depending on what's running on the network, and would still need a hosts file edit to mean anything here.
-
-`.localhost` needed neither. `steamstats.localhost:3001` and `steamstats.localhost:5173` work today, for every user, with zero setup — that's why the server prints them and the packaged `.exe` opens them automatically.
+Both are equally reachable as plain `http://localhost:5173` / `:3001` — `steamstats.localhost` is just the friendlier name the app itself uses (auto-opened by the packaged `.exe`, printed by the server on startup).
 
 ---
 
