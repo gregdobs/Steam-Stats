@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
 import {
-  formatHours, minutesToHours, formatLastPlayed, loadSnapshots,
+  formatHours, minutesToHours, formatLastPlayed, loadSnapshots, getGameHeaderUrl,
   computePlayStreak, computeWindowPercentile, computeDeckSplit,
   getDailyPlaytimeSeries, getDailyPlaytimeSeriesForGame,
 } from '../utils/steam.js';
-import { GameCapsule } from '../components/GameImage.jsx';
+import { GameCapsule, GameHeader } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
 import TonightPick from '../components/TonightPick.jsx';
 import { ALL_TIME_PERIODS, loadFeatureFlags, SourceBadge } from '../components/Navbar.jsx';
@@ -39,7 +39,7 @@ function BarStrip({ series, height = 96, highlightRecent = false, leftLabel, rig
   const highlightFrom = series.length - 4;
 
   return (
-    <div>
+    <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height }}>
         {series.map((d, i) => {
           const barHeight = d.minutes === 0 ? 3 : Math.max(6, Math.round((d.minutes / max) * height));
@@ -116,41 +116,101 @@ function PeriodToggle({ enabledPeriods, timePeriod, setTimePeriod, hoveredPeriod
   );
 }
 
-// Small clickable capsule for a game in the current period — sets the
-// cross-filter shared with the "Recent vs. lifetime" panel below.
-function HeroCapsule({ game, timePeriod, active, dimmed, onToggle }) {
+// Large poster-style capsule for a game in the current period — art fills
+// the frame, hours/name/relative-bar are overlaid at the bottom on a
+// gradient scrim. Sets the cross-filter shared with the "Recent vs.
+// lifetime" panel, the Focus card, and "Where the time went" below.
+function HeroCapsule({ game, timePeriod, topMinutes, active, dimmed, onToggle }) {
   const periodMinutes = getPeriodMinutes(game, timePeriod);
-  const allTimeMinutes = game.playtime_forever || 0;
-  const pct = allTimeMinutes > 0 ? Math.min(Math.round((periodMinutes / allTimeMinutes) * 100), 100) : 0;
+  const barPct = topMinutes > 0 ? Math.min(Math.round((periodMinutes / topMinutes) * 100), 100) : 0;
   return (
     <button
       onClick={onToggle}
-      title={game.name}
+      title={`${game.name} — ${formatHours(periodMinutes)}`}
       style={{
-        width: 78, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6,
-        background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left',
-        opacity: dimmed ? 0.4 : 1, transition: 'opacity 0.15s',
+        position: 'relative', flex: 1, minWidth: 0, aspectRatio: '2/3', padding: 0,
+        borderRadius: 16, overflow: 'hidden', cursor: 'pointer', background: 'var(--ss-inset)',
+        border: active ? '1px solid var(--ss-chart-hi)' : '1px solid var(--ss-line)',
+        boxShadow: active ? '0 20px 44px -18px var(--ss-chart-glow)' : '0 16px 34px -20px rgba(0,0,0,.9)',
+        transform: active ? 'translateY(-6px)' : 'none',
+        opacity: dimmed ? 0.42 : 1,
+        transition: 'transform .22s cubic-bezier(.22,1,.36,1), box-shadow .22s, opacity .2s',
       }}
     >
-      <div style={{
-        width: 78, height: 117, borderRadius: 12, overflow: 'hidden', background: 'var(--ss-inset)',
-        border: active ? '2px solid var(--ss-accent)' : '1px solid var(--ss-line)',
-      }}>
-        <GameCapsule appId={game.appid} name={game.name} />
-      </div>
-      <div style={{ fontSize: 11, color: active ? 'var(--ss-accent-txt)' : 'var(--ss-ink2)', fontWeight: 500 }}>{formatHours(periodMinutes)}</div>
-      <div style={{ height: 3, borderRadius: 99, background: 'var(--ss-track)', overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: 'var(--ss-chart-grad)' }} />
-      </div>
+      <GameCapsule appId={game.appid} name={game.name} />
+      <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(6,8,12,.94) 0%, rgba(6,8,12,.35) 42%, rgba(6,8,12,0) 72%)' }} />
+      <span style={{ position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3, padding: '10px 11px', textAlign: 'left' }}>
+        <span style={{ fontSize: 16, fontWeight: 600, lineHeight: 1, color: 'var(--ss-ink)' }}>{formatHours(periodMinutes)}</span>
+        <span style={{ fontSize: 10.5, lineHeight: 1.25, color: 'var(--ss-ink2)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{game.name}</span>
+      </span>
+      <span style={{ position: 'absolute', left: 9, right: 9, bottom: 44, height: 3, borderRadius: 99, background: 'rgba(255,255,255,.18)', overflow: 'hidden' }}>
+        <span style={{ display: 'block', height: '100%', borderRadius: 99, width: `${barPct}%`, background: 'var(--ss-chart-grad)' }} />
+      </span>
     </button>
   );
 }
 
-function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId, periodToggleProps, activeFilter, onToggleFilter }) {
+// Ghost bar = lifetime hours (scaled to the widest lifetime shown), bright
+// bar overlaid = the last two weeks on the same scale. Deliberately
+// period-independent (always 2 weeks vs. lifetime, regardless of the hero's
+// own period toggle) — it's answering "what's hot right now", not "what's
+// in the selected window". Shares the activeFilter state set by the hero
+// capsules and "Where the time went" below.
+function RecentVsLifetime({ ownedGames, activeFilter, onToggleFilter }) {
+  const shown = [...ownedGames]
+    .filter(g => (g.playtime_2weeks || 0) > 0)
+    .sort((a, b) => (b.playtime_2weeks || 0) - (a.playtime_2weeks || 0))
+    .slice(0, 8);
+  if (shown.length < 2) return null;
+
+  const maxLifetime = Math.max(...shown.map(g => g.playtime_forever || 0), 1);
+  const recentTotal = shown.reduce((s, g) => s + (g.playtime_2weeks || 0), 0);
+  const lifeTotal = shown.reduce((s, g) => s + (g.playtime_forever || 0), 0);
+  const intensityNote = lifeTotal > 0 ? `${Math.round((recentTotal / lifeTotal) * 100)}% recent` : null;
+
+  return (
+    <div className="ss-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+      <SectionHeading title="Recent vs. lifetime" trailing={intensityNote} />
+      <p style={{ margin: '-12px 0 18px', fontSize: 12, color: 'var(--ss-ink4)' }}>
+        Full bar is lifetime hours; the bright part is the last two weeks.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+        {shown.map(g => {
+          const periodMinutes = g.playtime_2weeks || 0;
+          const allTimeMinutes = g.playtime_forever || 0;
+          const active = activeFilter === g.appid;
+          const dimmed = activeFilter != null && !active;
+          return (
+            <div key={g.appid} onClick={() => onToggleFilter(g.appid)} style={{ cursor: 'pointer', padding: '6px 8px', borderRadius: 12, background: active ? 'var(--ss-btn)' : 'transparent', opacity: dimmed ? 0.4 : 1, transition: 'opacity 0.15s, background 0.15s' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
+                <span style={{ fontSize: 12.5, color: active ? 'var(--ss-accent-txt)' : 'var(--ss-ink2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</span>
+                <span style={{ fontSize: 12, color: 'var(--ss-accent-txt)', flexShrink: 0 }}>{formatHours(periodMinutes)} of {formatHours(allTimeMinutes)}</span>
+              </div>
+              <div style={{ position: 'relative', height: 10, borderRadius: 99, background: 'var(--ss-track)', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', inset: '0 auto 0 0', borderRadius: 99, width: `${Math.min((allTimeMinutes / maxLifetime) * 100, 100)}%`, background: 'var(--ss-chart-ghost)' }} />
+                <div style={{ position: 'absolute', inset: '0 auto 0 0', borderRadius: 99, width: `${Math.min((periodMinutes / maxLifetime) * 100, 100)}%`, background: 'var(--ss-chart-grad)', boxShadow: active ? '0 0 16px var(--ss-chart-glow)' : 'none', transition: 'width 0.6s cubic-bezier(.4,0,.2,1)' }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 16, fontSize: 11, color: 'var(--ss-ink4)' }}>
+        <span>LIFETIME</span><span>TOP {formatHours(maxLifetime)}</span>
+      </div>
+    </div>
+  );
+}
+
+function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId, periodToggleProps, activeFilter, onToggleFilter, ownedGames, gamesPlayed }) {
   const meta = PERIOD_META[timePeriod];
   const streak = steamId ? computePlayStreak(steamId) : null;
   const windowPct = (steamId && meta.days) ? computeWindowPercentile(steamId, meta.days) : null;
-  const series = (steamId && meta.days) ? getDailyPlaytimeSeries(steamId, meta.days) : [];
+  // The day-by-day bar strip is a bonus view for the opt-in snapshot-only
+  // periods (7/30 days) — 2 Weeks and All Time (the two periods this design
+  // actually covers) always pair with "Recent vs. lifetime" instead, even
+  // once enough snapshot history exists to draw a daily series for them too.
+  const isSnapshotPeriod = timePeriod === '7days' || timePeriod === '30days';
+  const series = (steamId && isSnapshotPeriod) ? getDailyPlaytimeSeries(steamId, meta.days) : [];
 
   const hours = minutesToHours(totalPeriodMinutes);
   const hoursLabel = hours >= 10 ? Math.round(hours).toLocaleString() : hours.toFixed(1);
@@ -160,22 +220,30 @@ function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId, per
     ? Math.round((getPeriodMinutes(topGame, timePeriod) / totalPeriodMinutes) * 100)
     : 0;
   const hasSubtext = windowPct?.percentile != null || (streak && streak.currentStreak > 0);
+  const topMinutes = Math.max(...periodGames.map(g => getPeriodMinutes(g, timePeriod)), 1);
+  const lastPlayed = topGame ? (topGame.localLastPlayed || topGame.rtime_last_played) : null;
+  const scopeLabel = timePeriod === 'alltime'
+    ? `${gamesPlayed.toLocaleString()} of ${ownedGames.length.toLocaleString()} games have recorded playtime`
+    : `${gameCount} game${gameCount === 1 ? '' : 's'} saw time ${meta.phrase}`;
+
+  const showRecentPanel = !isSnapshotPeriod && ownedGames.filter(g => (g.playtime_2weeks || 0) > 0).length >= 2;
+  const showRightPanel = series.length > 0 || showRecentPanel;
 
   return (
     <section style={{
       display: 'grid',
-      gridTemplateColumns: series.length ? 'minmax(0,1.45fr) minmax(0,1fr)' : '1fr',
-      gap: 56, alignItems: 'end',
+      gridTemplateColumns: showRightPanel ? 'minmax(0,1.35fr) minmax(0,1fr)' : '1fr',
+      gap: 34, alignItems: 'stretch',
     }}>
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-          <span style={{ fontSize: 11, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ss-ink3)' }}>
+      <div className="ss-panel-hi" style={{ padding: '30px 32px 28px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <span style={{ fontSize: 12, letterSpacing: '0.8px', textTransform: 'uppercase', color: 'var(--ss-ink3)', fontWeight: 500 }}>
             {PERIOD_EYEBROW[timePeriod]}
           </span>
           <span style={{ height: 1, flex: 1, background: 'var(--ss-line)' }} />
           <PeriodToggle {...periodToggleProps} timePeriod={timePeriod} />
         </div>
-        <h1 style={{ margin: 0, fontSize: 'clamp(26px, 3.2vw, 40px)', lineHeight: 1.22, fontWeight: 300, letterSpacing: '-0.9px', color: 'var(--ss-ink)' }}>
+        <h1 style={{ margin: 0, fontSize: 'clamp(26px, 3vw, 40px)', lineHeight: 1.2, fontWeight: 300, letterSpacing: '-1px', color: 'var(--ss-ink)' }}>
           <span style={{ fontWeight: 600 }}>{hoursLabel} hours</span>
           {` across ${gameCount} game${gameCount === 1 ? '' : 's'} ${meta.phrase}`}
           {windowPct?.percentile >= 75 && ' — a heavier stretch than usual'}
@@ -190,11 +258,24 @@ function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId, per
             {streak && streak.currentStreak > 0 && `${streak.currentStreak} day${streak.currentStreak === 1 ? '' : 's'} running, with today still open.`}
           </p>
         )}
+        {(lastPlayed || scopeLabel) && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 24, flexWrap: 'wrap' }}>
+            {lastPlayed && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 13px', borderRadius: 99, background: 'var(--ss-pill-bg)', border: '1px solid var(--ss-pill-line)', fontSize: 12.5, color: 'var(--ss-pill-ink)' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--ss-accent)', boxShadow: '0 0 8px var(--ss-accent)' }} />
+                Last played {formatLastPlayed(lastPlayed)}
+              </span>
+            )}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 13px', borderRadius: 99, background: 'var(--ss-pill2-bg)', border: '1px solid var(--ss-pill2-line)', fontSize: 12.5, color: 'var(--ss-pill2-ink)' }}>
+              {scopeLabel}
+            </span>
+          </div>
+        )}
         {gameCount > 1 && (
-          <div style={{ display: 'flex', gap: 10, marginTop: 24, overflowX: 'auto', paddingBottom: 2 }}>
+          <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
             {periodGames.slice(0, 6).map(g => (
               <HeroCapsule
-                key={g.appid} game={g} timePeriod={timePeriod}
+                key={g.appid} game={g} timePeriod={timePeriod} topMinutes={topMinutes}
                 active={activeFilter === g.appid}
                 dimmed={activeFilter != null && activeFilter !== g.appid}
                 onToggle={() => onToggleFilter(g.appid)}
@@ -203,42 +284,16 @@ function HeroSection({ periodGames, totalPeriodMinutes, timePeriod, steamId, per
           </div>
         )}
       </div>
-      {series.length > 0 && <BarStrip series={series} highlightRecent />}
-    </section>
-  );
-}
-
-// Ghost bar = lifetime hours (scaled to the widest lifetime shown), bright
-// bar overlaid = this period's hours on the same scale — shares the
-// activeFilter state set by the hero capsules above.
-function RecentVsLifetime({ periodGames, timePeriod, activeFilter, onToggleFilter }) {
-  if (periodGames.length < 2) return null;
-  const shown = periodGames.slice(0, 8);
-  const maxLifetime = Math.max(...shown.map(g => g.playtime_forever || 0), 1);
-
-  return (
-    <section className="ss-panel">
-      <SectionHeading title="Recent vs. lifetime" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {shown.map(g => {
-          const periodMinutes = getPeriodMinutes(g, timePeriod);
-          const allTimeMinutes = g.playtime_forever || 0;
-          const active = activeFilter === g.appid;
-          const dimmed = activeFilter != null && !active;
-          return (
-            <div key={g.appid} onClick={() => onToggleFilter(g.appid)} style={{ cursor: 'pointer', opacity: dimmed ? 0.4 : 1, transition: 'opacity 0.15s' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, gap: 10 }}>
-                <span style={{ fontSize: 13, color: active ? 'var(--ss-accent-txt)' : 'var(--ss-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</span>
-                <span style={{ fontSize: 12, color: 'var(--ss-ink3)', flexShrink: 0 }}>{formatHours(periodMinutes)} / {formatHours(allTimeMinutes)}</span>
-              </div>
-              <div style={{ position: 'relative', height: 8, borderRadius: 99, background: 'var(--ss-track)', overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', inset: 0, width: `${Math.min((allTimeMinutes / maxLifetime) * 100, 100)}%`, background: chartRgba(0.22), borderRadius: 99 }} />
-                <div style={{ position: 'absolute', inset: 0, width: `${Math.min((periodMinutes / maxLifetime) * 100, 100)}%`, background: active ? 'var(--ss-chart-hi)' : 'var(--ss-chart-fill)', borderRadius: 99, transition: 'width 0.4s ease' }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {series.length > 0 ? (
+        <div className="ss-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+          <SectionHeading title="Day by day" trailing={meta.shortLabel} />
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+            <BarStrip series={series} highlightRecent />
+          </div>
+        </div>
+      ) : showRecentPanel ? (
+        <RecentVsLifetime ownedGames={ownedGames} activeFilter={activeFilter} onToggleFilter={onToggleFilter} />
+      ) : null}
     </section>
   );
 }
@@ -254,12 +309,23 @@ function FocusCard({ game, timePeriod, periodMinutes, totalPeriodMinutes, steamI
   const lastPlayed = game.localLastPlayed || game.rtime_last_played;
   const columns = (timePeriod === 'alltime' ? 1 : 2) + (avgSessionHours != null ? 1 : 0);
 
+  const winMin = game.playtime_windows_forever || 0;
+  const deckMin = game.playtime_deck_forever || 0;
+  const platTotal = winMin + deckMin;
+  const platforms = [
+    winMin > 0 && { label: 'Windows', minutes: winMin, color: 'var(--ss-chart-grad)' },
+    deckMin > 0 && { label: 'Steam Deck', minutes: deckMin, color: 'var(--ss-chart-alt)' },
+  ].filter(Boolean);
+  const bottomIsPlatforms = platforms.length > 0;
+
   return (
-    <article className="ss-panel" onClick={onClick} style={{ padding: 26, display: 'flex', gap: 26, cursor: 'pointer' }}>
-      <div style={{ width: 132, height: 198, flexShrink: 0, alignSelf: 'flex-start', borderRadius: 18, overflow: 'hidden', background: 'var(--ss-inset)' }}>
+    <article className="ss-panel" onClick={onClick} style={{ position: 'relative', padding: 26, display: 'flex', gap: 26, cursor: 'pointer', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', inset: 0, opacity: 'var(--ss-art-opacity)', backgroundImage: `url(${getGameHeaderUrl(game.appid)})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(28px) saturate(140%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', inset: 0, background: 'var(--ss-scrim)', pointerEvents: 'none' }} />
+      <div style={{ position: 'relative', width: 132, height: 198, flexShrink: 0, alignSelf: 'flex-start', borderRadius: 18, overflow: 'hidden', background: 'var(--ss-inset)', boxShadow: '0 18px 40px -14px rgba(0,0,0,.9)' }}>
         <GameCapsule appId={game.appid} name={game.name} />
       </div>
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ position: 'relative', flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div>
           <h3 style={{ margin: '0 0 6px', fontSize: 25, fontWeight: 600, letterSpacing: '-0.5px', lineHeight: 1.2, color: 'var(--ss-ink)' }}>
             {game.name}
@@ -292,8 +358,29 @@ function FocusCard({ game, timePeriod, periodMinutes, totalPeriodMinutes, steamI
         )}
 
         {hasSparkline && (
-          <div style={{ marginTop: 'auto' }}>
+          <div style={bottomIsPlatforms ? undefined : { marginTop: 'auto' }}>
             <BarStrip series={sparkline} height={44} leftLabel="THIS GAME, DAY BY DAY" rightLabel={`PEAK ${peakHours}H`} />
+          </div>
+        )}
+
+        {bottomIsPlatforms && (
+          <div style={{ marginTop: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, letterSpacing: '0.8px', textTransform: 'uppercase', color: 'var(--ss-ink3)', marginBottom: 9, fontWeight: 500 }}>
+              <span>Where you played it</span>
+              <span>{deckMin > 0 ? `${Math.round((deckMin / platTotal) * 100)}% on Deck` : 'Desktop only'}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 3, height: 12, borderRadius: 99, overflow: 'hidden', background: 'rgba(255,255,255,.07)' }}>
+              {platforms.map(p => (
+                <div key={p.label} title={`${p.label} — ${formatHours(p.minutes)}`} style={{ width: `${(p.minutes / platTotal) * 100}%`, background: p.color }} />
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap' }}>
+              {platforms.map(p => (
+                <span key={p.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, color: 'var(--ss-ink2)' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 3, background: p.color }} />{p.label} · {formatHours(p.minutes)}
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -330,7 +417,60 @@ function ActiveRow({ game, timePeriod, onClick }) {
   );
 }
 
-function TimeBreakdown({ periodGames, timePeriod, totalPeriodMinutes }) {
+// The drill panel shown above the slice list when a game is selected —
+// shares the same activeFilter/focusId that drives the hero capsules,
+// Recent-vs-lifetime rows, and the Focus card above.
+function TimeBreakdownDrill({ game, timePeriod, totalPeriodMinutes, onOpen, onClear }) {
+  const periodMinutes = getPeriodMinutes(game, timePeriod);
+  const allTimeMinutes = game.playtime_forever || 0;
+  const pct = totalPeriodMinutes > 0 ? Math.round((periodMinutes / totalPeriodMinutes) * 100) : 0;
+  const deckMin = game.playtime_deck_forever || 0;
+  const deckPct = allTimeMinutes > 0 && deckMin > 0 ? Math.round((deckMin / allTimeMinutes) * 100) : null;
+  const lastPlayed = game.localLastPlayed || game.rtime_last_played;
+
+  const stats = [
+    { label: PERIOD_META[timePeriod].shortLabel, value: formatHours(periodMinutes) },
+    { label: 'Lifetime', value: formatHours(allTimeMinutes) },
+    { label: 'Share', value: `${pct}%` },
+    deckPct != null && { label: 'On Deck', value: `${deckPct}%` },
+    lastPlayed && { label: 'Last played', value: formatLastPlayed(lastPlayed) },
+  ].filter(Boolean);
+
+  return (
+    <div style={{
+      marginBottom: 20, padding: '20px 22px', borderRadius: 20,
+      background: 'linear-gradient(160deg, var(--ss-pill-bg), transparent)',
+      border: '1px solid var(--ss-pill-line)', boxShadow: 'inset 0 1px 0 var(--ss-hi)',
+      animation: 'ssRise 0.22s ease both',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+        <div style={{ width: 74, height: 35, borderRadius: 9, overflow: 'hidden', flexShrink: 0, background: 'var(--ss-inset)' }}>
+          <GameHeader appId={game.appid} name={game.name} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{game.name}</div>
+          <div style={{ fontSize: 12.5, color: 'var(--ss-ink2)' }}>
+            {pct}% of this period · {formatHours(allTimeMinutes)} lifetime{lastPlayed ? ` · last played ${formatLastPlayed(lastPlayed)}` : ''}
+          </div>
+        </div>
+        <button onClick={onOpen} style={{ padding: '9px 15px', borderRadius: 14, background: 'var(--ss-btn)', border: '1px solid var(--ss-line)', color: 'var(--ss-ink)', fontSize: 12.5, cursor: 'pointer', flexShrink: 0 }}>
+          Full detail
+        </button>
+        <button onClick={onClear} style={{ width: 32, height: 32, borderRadius: 11, background: 'var(--ss-btn)', border: '1px solid var(--ss-line)', color: 'var(--ss-ink2)', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>✕</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${stats.length}, minmax(0,1fr))`, gap: 12 }}>
+        {stats.map(s => (
+          <div key={s.label} style={{ padding: '13px 15px', borderRadius: 15, background: 'var(--ss-inset)', border: '1px solid var(--ss-line-soft)' }}>
+            <div style={{ fontSize: 10.5, letterSpacing: '0.7px', textTransform: 'uppercase', color: 'var(--ss-ink3)', marginBottom: 6, fontWeight: 500 }}>{s.label}</div>
+            <div style={{ fontSize: 19, lineHeight: 1, color: 'var(--ss-ink)' }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TimeBreakdown({ periodGames, timePeriod, totalPeriodMinutes, activeFilter, onToggleFilter, onOpenGame }) {
   if (periodGames.length < 2) return null;
 
   const MAX = 9;
@@ -338,50 +478,88 @@ function TimeBreakdown({ periodGames, timePeriod, totalPeriodMinutes }) {
   const rest = periodGames.slice(MAX);
   const restTotal = rest.reduce((s, g) => s + getPeriodMinutes(g, timePeriod), 0);
   const sliceCount = top.length + (restTotal > 0 ? 1 : 0);
+  const topSliceMinutes = getPeriodMinutes(top[0], timePeriod);
 
-  const slices = top.map((g, i) => ({
-    id: g.appid, name: g.name, minutes: getPeriodMinutes(g, timePeriod),
-    color: tint(i, sliceCount), ink: i < 2 ? 'var(--ss-bg)' : 'var(--ss-ink2)',
-  }));
+  const slices = top.map((g, i) => {
+    const minutes = getPeriodMinutes(g, timePeriod);
+    const active = activeFilter === g.appid;
+    return {
+      id: g.appid, appid: g.appid, name: g.name, minutes, active,
+      color: active ? 'var(--ss-chart-band)' : tint(i, sliceCount),
+      barPct: topSliceMinutes > 0 ? (minutes / topSliceMinutes) * 100 : 0,
+    };
+  });
   if (restTotal > 0) {
-    slices.push({ id: 'other', name: `${rest.length} other game${rest.length === 1 ? '' : 's'}`, minutes: restTotal, color: 'var(--ss-track)', ink: 'var(--ss-ink2)' });
+    slices.push({
+      id: 'other', appid: null, name: `${rest.length} other game${rest.length === 1 ? '' : 's'}`, minutes: restTotal,
+      color: 'var(--ss-track)', barPct: topSliceMinutes > 0 ? (restTotal / topSliceMinutes) * 100 : 0, active: false,
+    });
   }
+
+  const topCount = Math.min(2, top.length);
+  const topShareMinutes = top.slice(0, topCount).reduce((s, g) => s + getPeriodMinutes(g, timePeriod), 0);
+  const topSharePct = totalPeriodMinutes > 0 ? Math.round((topShareMinutes / totalPeriodMinutes) * 100) : 0;
+  const restMinutes = Math.max(totalPeriodMinutes - topShareMinutes, 0);
+  const restGamesCount = periodGames.length - topCount;
+
+  const drillGame = activeFilter != null ? periodGames.find(g => g.appid === activeFilter) : null;
 
   return (
     <section>
-      <SectionHeading title="Where the time went" trailing={`${formatHours(totalPeriodMinutes)} total`} />
-      <div style={{ display: 'flex', gap: 3, height: 52, marginBottom: 24 }}>
-        {slices.map(s => {
-          const pct = totalPeriodMinutes > 0 ? (s.minutes / totalPeriodMinutes) * 100 : 0;
-          return (
-            <div key={s.id} title={`${s.name} — ${formatHours(s.minutes)}`} style={{
-              width: `${pct}%`, background: s.color, borderRadius: 8,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-            }}>
-              {pct > 5.5 && (
-                <span style={{ fontSize: 11, color: s.ink, whiteSpace: 'nowrap' }}>
-                  {Math.round(pct)}%
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '0 48px' }}>
-        {slices.map(s => (
-          <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: '1px solid var(--ss-line-soft)' }}>
-            <span style={{ width: 9, height: 9, borderRadius: 3, flexShrink: 0, background: s.color }} />
-            <span style={{ flex: 1, fontSize: 14, color: 'var(--ss-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {s.name}
-            </span>
-            <span style={{ fontSize: 13, color: 'var(--ss-ink3)', flexShrink: 0 }}>
-              {totalPeriodMinutes > 0 ? Math.round((s.minutes / totalPeriodMinutes) * 100) : 0}%
-            </span>
-            <span style={{ fontSize: 14, color: 'var(--ss-ink)', width: 52, textAlign: 'right', flexShrink: 0 }}>
-              {formatHours(s.minutes)}
-            </span>
+      <SectionHeading title="Where the time went" trailing={`${formatHours(totalPeriodMinutes)} total · click a row to drill in`} />
+      <div className="ss-panel">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '0 2px 18px', marginBottom: 4, borderBottom: '1px solid var(--ss-line-soft)', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13.5, color: 'var(--ss-ink2)', flexShrink: 0 }}>
+            Top {topCount} game{topCount === 1 ? '' : 's'} account{topCount === 1 ? 's' : ''} for {topSharePct}% of usage
+          </span>
+          <div style={{ flex: 1, minWidth: 120, display: 'flex', gap: 3, height: 8, borderRadius: 99, overflow: 'hidden', background: 'var(--ss-track)' }}>
+            <div style={{ width: `${topSharePct}%`, background: 'var(--ss-chart-band)' }} />
+            <div style={{ width: `${100 - topSharePct}%`, background: 'var(--ss-chart-ghost)' }} />
           </div>
-        ))}
+          {restGamesCount > 0 && (
+            <span style={{ fontSize: 12.5, color: 'var(--ss-ink4)', flexShrink: 0 }}>the other {restGamesCount} split {formatHours(restMinutes)}</span>
+          )}
+        </div>
+
+        {drillGame && (
+          <TimeBreakdownDrill
+            game={drillGame} timePeriod={timePeriod} totalPeriodMinutes={totalPeriodMinutes}
+            onOpen={() => onOpenGame(drillGame)}
+            onClear={() => onToggleFilter(drillGame.appid)}
+          />
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {slices.map(s => (
+            <div
+              key={s.id}
+              onClick={() => s.appid != null && onToggleFilter(s.appid)}
+              title={`${s.name} — ${formatHours(s.minutes)}`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 14, padding: '11px 10px', borderRadius: 14,
+                cursor: s.appid != null ? 'pointer' : 'default',
+                borderBottom: '1px solid var(--ss-line-soft)',
+                opacity: activeFilter != null && !s.active ? 0.45 : 1,
+                background: s.active ? 'var(--ss-btn)' : 'transparent',
+                transition: 'background 0.15s, opacity 0.15s',
+              }}
+            >
+              <div style={{ width: 58, height: 28, borderRadius: 7, overflow: 'hidden', flexShrink: 0, background: 'var(--ss-inset)' }}>
+                {s.appid != null && <GameHeader appId={s.appid} name={s.name} />}
+              </div>
+              <span style={{ width: 158, flexShrink: 0, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: s.active ? 'var(--ss-accent-txt)' : 'var(--ss-ink)' }}>
+                {s.name}
+              </span>
+              <div style={{ flex: 1, minWidth: 60, height: 12, borderRadius: 99, background: 'var(--ss-track)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', borderRadius: 99, width: `${s.barPct}%`, background: s.color, transition: 'width 0.6s cubic-bezier(.4,0,.2,1)' }} />
+              </div>
+              <span style={{ fontSize: 14, width: 58, textAlign: 'right', flexShrink: 0, color: s.active ? 'var(--ss-accent-txt)' : 'var(--ss-ink)' }}>{formatHours(s.minutes)}</span>
+              <span style={{ fontSize: 12.5, width: 42, textAlign: 'right', flexShrink: 0, color: 'var(--ss-ink3)' }}>
+                {totalPeriodMinutes > 0 ? Math.round((s.minutes / totalPeriodMinutes) * 100) : 0}%
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -487,7 +665,12 @@ export default function Dashboard() {
     : null;
 
   const heroGame = periodGames[0];
-  const alsoActive = periodGames.slice(1, 4);
+  // Selecting a game anywhere (hero capsule, Recent-vs-lifetime row, a
+  // "Where the time went" row) promotes it to be the Focus card's subject —
+  // one shared selection drives every section, matching the design's single
+  // focusId model instead of Focus always pinning to the #1 game.
+  const focusGame = filteredGame || heroGame;
+  const alsoActive = focusGame ? periodGames.filter(g => g.appid !== focusGame.appid).slice(0, 3) : [];
 
   return (
     <div style={{ maxWidth: 1180, margin: '0 auto', padding: '34px 24px 96px', display: 'flex', flexDirection: 'column', gap: 40 }}>
@@ -499,6 +682,7 @@ export default function Dashboard() {
             periodGames={periodGames} totalPeriodMinutes={totalPeriodMinutes} timePeriod={timePeriod} steamId={steamId}
             periodToggleProps={{ enabledPeriods, setTimePeriod, hoveredPeriod, setHoveredPeriod }}
             activeFilter={activeFilter} onToggleFilter={toggleFilter}
+            ownedGames={ownedGames} gamesPlayed={gamesPlayed}
           />
 
           {filteredGame && (
@@ -507,8 +691,6 @@ export default function Dashboard() {
               onClear={() => setActiveFilter(null)}
             />
           )}
-
-          <RecentVsLifetime periodGames={periodGames} timePeriod={timePeriod} activeFilter={activeFilter} onToggleFilter={toggleFilter} />
 
           <TonightPick />
 
@@ -520,10 +702,10 @@ export default function Dashboard() {
               gap: 20, alignItems: 'stretch',
             }}>
               <FocusCard
-                game={heroGame} timePeriod={timePeriod}
-                periodMinutes={getPeriodMinutes(heroGame, timePeriod)}
+                game={focusGame} timePeriod={timePeriod}
+                periodMinutes={getPeriodMinutes(focusGame, timePeriod)}
                 totalPeriodMinutes={totalPeriodMinutes} steamId={steamId}
-                onClick={() => handleSelectGame(heroGame)}
+                onClick={() => handleSelectGame(focusGame)}
               />
               {alsoActive.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -535,7 +717,10 @@ export default function Dashboard() {
             </div>
           </section>
 
-          <TimeBreakdown periodGames={periodGames} timePeriod={timePeriod} totalPeriodMinutes={totalPeriodMinutes} />
+          <TimeBreakdown
+            periodGames={periodGames} timePeriod={timePeriod} totalPeriodMinutes={totalPeriodMinutes}
+            activeFilter={activeFilter} onToggleFilter={toggleFilter} onOpenGame={handleSelectGame}
+          />
 
           <FooterStats
             ownedGames={ownedGames} gamesPlayed={gamesPlayed}

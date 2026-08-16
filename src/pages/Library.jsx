@@ -344,6 +344,9 @@ export default function Library() {
           </div>
           <DistributionDonut games={ownedGames} activeFilter={activeFilter} onFilter={handleFilter} />
           <DerivedStats ownedGames={ownedGames} />
+          <p style={{ margin: '14px 0 0', fontSize: 11, color: 'var(--ss-ink4)', textAlign: 'center' }}>
+            Click a segment to filter every panel on this page
+          </p>
         </div>
 
         <div className="ss-panel">

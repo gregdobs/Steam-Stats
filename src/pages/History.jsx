@@ -1,258 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import { Chart, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler, BarElement, BarController, LineController } from 'chart.js';
+import { useEffect, useState } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
 import {
-  loadSnapshots, formatHours, formatLastPlayed, computeDayOfWeekPattern,
+  formatHours, formatLastPlayed,
   daysSincePlayed, recencyBucket, RECENCY_BUCKETS,
   computeMonthlyUnlocks, computeYearlyUnlocks,
 } from '../utils/steam.js';
 import { PageHeader, SectionHeading, chartRgba } from '../components/designSystem.jsx';
 import { GameHeader } from '../components/GameImage.jsx';
-
-Chart.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler, BarElement, BarController, LineController);
-
-// Chart.js can't consume CSS var() strings directly, so read the theme's
-// resolved values at draw time instead of hardcoding a second palette here.
-function readThemeColor(varName, fallback) {
-  if (typeof document === 'undefined') return fallback;
-  const v = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-  return v || fallback;
-}
-
-function TrendChart({ trends, theme }) {
-  const canvasRef = useRef(null);
-  const chartRef = useRef(null);
-
-  useEffect(() => {
-    if (!canvasRef.current || !trends || trends.length < 2) return;
-    if (chartRef.current) chartRef.current.destroy();
-
-    const textColor = readThemeColor('--ss-ink3', '#8b93a3');
-    const gridColor = readThemeColor('--ss-line-soft', 'rgba(255,255,255,.07)');
-    const rgb = readThemeColor('--ss-chart-rgb', '111,200,247');
-
-    const labels = trends.map(t => {
-      const d = new Date(t.timestamp);
-      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    });
-
-    chartRef.current = new Chart(canvasRef.current, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Hours played',
-          data: trends.map(t => t.hoursPlayed),
-          borderColor: `rgb(${rgb})`,
-          backgroundColor: `rgba(${rgb},0.16)`,
-          fill: true,
-          tension: 0.4,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          pointBackgroundColor: `rgb(${rgb})`,
-          borderWidth: 2,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: ctx => ` ${ctx.parsed.y.toFixed(1)} hours played`,
-              title: ctx => ctx[0].label,
-            }
-          }
-        },
-        scales: {
-          x: { grid: { color: gridColor }, ticks: { color: textColor, maxTicksLimit: 10 } },
-          y: { grid: { color: gridColor }, ticks: { color: textColor, callback: v => `${v}h` }, beginAtZero: true },
-        }
-      }
-    });
-
-    return () => chartRef.current?.destroy();
-  }, [trends, theme]);
-
-  if (!trends || trends.length < 2) {
-    return (
-      <div style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-        justifyContent: 'center', height: 200, gap: 12, color: 'var(--ss-ink3)',
-      }}>
-        <div style={{ fontSize: 36 }}>📈</div>
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ fontWeight: 600, color: 'var(--ss-ink2)', marginBottom: 4 }}>Building your history</p>
-          <p style={{ fontSize: 13 }}>Each time you open the app, a snapshot is saved.</p>
-          <p style={{ fontSize: 13 }}>Come back tomorrow for your first trend line.</p>
-        </div>
-      </div>
-    );
-  }
-
-  return <div style={{ position: 'relative', width: '100%', height: 280 }}><canvas ref={canvasRef} /></div>;
-}
-
-function WeekdayPattern({ pattern }) {
-  if (!pattern) {
-    return (
-      <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--ss-ink3)', fontSize: 13 }}>
-        Needs about two weeks of tracked days before a weekday pattern means anything.
-      </div>
-    );
-  }
-
-  const max = Math.max(...pattern.map(d => d.avgMinutes), 1);
-  const peak = pattern.reduce((a, b) => (b.avgMinutes > a.avgMinutes ? b : a), pattern[0]);
-
-  return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 140 }}>
-        {pattern.map(d => {
-          const barHeight = d.avgMinutes === 0 ? 3 : Math.max(6, Math.round((d.avgMinutes / max) * 140));
-          const isPeak = d.label === peak.label && d.avgMinutes > 0;
-          return (
-            <div
-              key={d.label}
-              title={`${d.label}: ${formatHours(Math.round(d.avgMinutes))} avg over ${d.sampleCount} day${d.sampleCount === 1 ? '' : 's'} tracked`}
-              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', gap: 8 }}
-            >
-              <div style={{
-                width: '100%', maxWidth: 34, borderRadius: 6, height: barHeight,
-                background: isPeak ? 'var(--ss-chart-hi)' : chartRgba(d.avgMinutes === 0 ? 0.12 : 0.45),
-                transition: 'height 0.5s ease',
-              }} />
-              <span style={{ fontSize: 11, color: 'var(--ss-ink3)' }}>{d.label}</span>
-            </div>
-          );
-        })}
-      </div>
-      {peak.avgMinutes > 0 && (
-        <p style={{ fontSize: 12, color: 'var(--ss-ink3)', marginTop: 16 }}>
-          <span style={{ color: 'var(--ss-accent)', fontWeight: 600 }}>{peak.label}</span> is your heaviest day on average — {formatHours(Math.round(peak.avgMinutes))}.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function PlayHeatmap({ snapshots }) {
-  const dayData = {};
-
-  for (let i = 1; i < snapshots.length; i++) {
-    const prev = snapshots[i - 1];
-    const curr = snapshots[i];
-    const daysDiff = (curr.timestamp - prev.timestamp) / (1000 * 60 * 60 * 24);
-    if (daysDiff > 5) continue;
-
-    const prevMap = new Map((prev.games || []).map(g => [g.appid, g.playtime_forever]));
-    let deltaMinutes = 0;
-
-    for (const game of (curr.games || [])) {
-      const prevTime = prevMap.get(game.appid) || 0;
-      const delta = game.playtime_forever - prevTime;
-      if (delta > 0) deltaMinutes += delta;
-    }
-
-    const dateKey = new Date(curr.timestamp).toDateString();
-    dayData[dateKey] = (dayData[dateKey] || 0) + deltaMinutes;
-  }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const startDate = new Date(today);
-  startDate.setDate(startDate.getDate() - 364);
-  while (startDate.getDay() !== 1) startDate.setDate(startDate.getDate() - 1);
-
-  const weeks = [];
-  let current = new Date(startDate);
-
-  while (current <= today) {
-    const week = [];
-    for (let d = 0; d < 7; d++) {
-      const dateKey = current.toDateString();
-      const minutes = dayData[dateKey] || 0;
-      week.push({ date: new Date(current), minutes });
-      current.setDate(current.getDate() + 1);
-    }
-    weeks.push(week);
-  }
-
-  const maxMinutes = Math.max(...Object.values(dayData), 60);
-
-  const getColor = (minutes) => {
-    if (minutes === 0) return 'var(--ss-inset)';
-    const intensity = Math.min(minutes / maxMinutes, 1);
-    if (intensity < 0.25) return chartRgba(0.28);
-    if (intensity < 0.5) return chartRgba(0.5);
-    if (intensity < 0.75) return chartRgba(0.75);
-    return chartRgba(1);
-  };
-
-  const monthLabels = [];
-  weeks.forEach((week, wi) => {
-    const firstDay = week[0];
-    if (firstDay.date.getDate() <= 7 || wi === 0) {
-      monthLabels.push({ label: firstDay.date.toLocaleDateString('en-US', { month: 'short' }), weekIndex: wi });
-    }
-  });
-
-  const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  const cellSize = 13;
-  const gap = 2;
-
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <div style={{ display: 'flex', paddingLeft: 28, marginBottom: 4 }}>
-        {weeks.map((_, wi) => {
-          const ml = monthLabels.find(m => m.weekIndex === wi);
-          return (
-            <div key={wi} style={{ width: cellSize + gap, flexShrink: 0, fontSize: 10, color: 'var(--ss-ink3)' }}>
-              {ml ? ml.label : ''}
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ display: 'flex', gap: 4 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap, paddingTop: 0 }}>
-          {DAYS.map((d, i) => (
-            <div key={i} style={{ height: cellSize, width: 16, fontSize: 9, color: 'var(--ss-ink3)', display: 'flex', alignItems: 'center' }}>
-              {i % 2 === 0 ? d : ''}
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap }}>
-          {weeks.map((week, wi) => (
-            <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap }}>
-              {week.map((day, di) => (
-                <div
-                  key={di}
-                  title={`${day.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}: ${day.minutes > 0 ? (day.minutes / 60).toFixed(1) + 'h played' : 'No data'}`}
-                  style={{
-                    width: cellSize, height: cellSize, borderRadius: 2,
-                    background: getColor(day.minutes),
-                    border: day.minutes > 0 ? `1px solid ${chartRgba(0.24)}` : '1px solid var(--ss-line-soft)',
-                    transition: 'transform 0.1s',
-                  }}
-                  onMouseEnter={e => { if (day.minutes > 0) e.currentTarget.style.transform = 'scale(1.3)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = ''; }}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, paddingLeft: 28 }}>
-        <span style={{ fontSize: 11, color: 'var(--ss-ink3)' }}>Less</span>
-        {[0, 0.25, 0.5, 0.75, 1].map(i => (
-          <div key={i} style={{ width: cellSize, height: cellSize, borderRadius: 2, background: i === 0 ? 'var(--ss-inset)' : chartRgba(i), border: '1px solid var(--ss-line-soft)' }} />
-        ))}
-        <span style={{ fontSize: 11, color: 'var(--ss-ink3)' }}>More</span>
-      </div>
-    </div>
-  );
-}
 
 // ── Achievement unlocks over time (month-by-month, click a point to drill) ─
 const MONTH_RANGES = [['all', 'All months'], ['12', 'Last 12'], ['6', 'Last 6']];
@@ -260,6 +14,11 @@ const MONTH_RANGES = [['all', 'All months'], ['12', 'Last 12'], ['6', 'Last 6']]
 function monthLabel(key) {
   const [y, m] = key.split('-');
   return new Date(Date.UTC(+y, +m - 1, 1)).toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+}
+
+function fullMonthLabel(key) {
+  const [y, m] = key.split('-');
+  return new Date(Date.UTC(+y, +m - 1, 1)).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
 function MonthlyUnlocksChart({ months, appidToHeader }) {
@@ -466,8 +225,7 @@ function SteamYears({ years }) {
 
 // ── Main page ────────────────────────────────────────────────────────────
 export default function History() {
-  const { historicalTrends, ownedGames, steamId, theme, achCache, config, getAchievementsForGames } = useApp();
-  const snapshots = steamId ? loadSnapshots(steamId) : [];
+  const { ownedGames, achCache, config, getAchievementsForGames } = useApp();
 
   const playedGames = ownedGames.filter(g => g.playtime_forever > 0).sort((a, b) => b.playtime_forever - a.playtime_forever).slice(0, 100);
   useEffect(() => {
@@ -475,16 +233,6 @@ export default function History() {
     getAchievementsForGames(playedGames.map(g => g.appid));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playedGames.length, config?.apiKey, config?.steamId]);
-
-  const totalSessions = snapshots.length;
-  const totalDaysTracked = snapshots.length > 1
-    ? Math.round((snapshots[snapshots.length - 1].timestamp - snapshots[0].timestamp) / (1000 * 60 * 60 * 24))
-    : 0;
-
-  const trendHours = historicalTrends || [];
-  const avgWeeklyHours = trendHours.length > 0 ? (trendHours.reduce((s, t) => s + t.hoursPlayed, 0) / trendHours.length).toFixed(1) : null;
-  const peakWeek = trendHours.length > 0 ? trendHours.reduce((max, t) => t.hoursPlayed > max.hoursPlayed ? t : max, trendHours[0]) : null;
-  const weekdayPattern = computeDayOfWeekPattern(steamId);
 
   const monthlyUnlocks = computeMonthlyUnlocks(achCache, ownedGames);
   const yearlyUnlocks = computeYearlyUnlocks(achCache, ownedGames);
@@ -505,11 +253,11 @@ export default function History() {
       <PageHeader
         eyebrow="History"
         title={
-          totalDaysTracked > 0
-            ? <><span style={{ fontWeight: 600 }}>{totalDaysTracked} days</span> tracked, across {totalSessions} snapshot{totalSessions !== 1 ? 's' : ''}.</>
+          totalUnlocks > 0
+            ? <><span style={{ fontWeight: 600 }}>{totalUnlocks.toLocaleString()} dated events</span> going back to {fullMonthLabel(firstUnlock)}.</>
             : 'Play History'
         }
-        subtitle="Local snapshots build a playtime trend the longer you use the app. Achievement unlock dates and last-played timestamps are real Steam history — no local tracking required."
+        subtitle="Steam timestamps every achievement unlock and the last time you opened each game. That is a real history — no local tracking required."
       />
 
       {/* Achievement-dated stats */}
@@ -554,30 +302,6 @@ export default function History() {
           <SteamYears years={yearlyUnlocks} />
         </section>
       </div>
-
-      {/* Playtime trend (snapshot-derived) */}
-      <section className="ss-panel" style={sectionStyle}>
-        <SectionHeading title="Playtime over time" trailing="from local snapshots" />
-        <TrendChart trends={historicalTrends} theme={theme} />
-      </section>
-
-      {/* Day-of-week pattern */}
-      <section className="ss-panel" style={sectionStyle}>
-        <SectionHeading title="Day-of-week pattern" />
-        <p style={{ margin: '-12px 0 18px', fontSize: 12, color: 'var(--ss-ink3)' }}>
-          Average hours played, by weekday, from your daily snapshot history.
-        </p>
-        <WeekdayPattern pattern={weekdayPattern} />
-      </section>
-
-      {/* Heatmap */}
-      <section className="ss-panel" style={sectionStyle}>
-        <SectionHeading title="Play activity heatmap" />
-        <p style={{ margin: '-12px 0 18px', fontSize: 12, color: 'var(--ss-ink3)' }}>
-          Based on daily snapshot deltas. Darker = more hours played that day.
-        </p>
-        <PlayHeatmap snapshots={snapshots} />
-      </section>
     </div>
   );
 }
