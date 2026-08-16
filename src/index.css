@@ -154,6 +154,11 @@ body{font-variant-numeric:tabular-nums;}
 @keyframes ssFade{from{opacity:0}to{opacity:1}}
 @keyframes ssDrift{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(3%,-2%,0) scale(1.08)}}
 
+@keyframes tpReel{0%{transform:translateY(0) scale(1.03);filter:blur(0)}50%{transform:translateY(-4%) scale(1.06);filter:blur(3px)}100%{transform:translateY(0) scale(1.03);filter:blur(0)}}
+@keyframes tpFlicker{0%{opacity:0;transform:translateY(-8px)}45%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(7px)}}
+@keyframes tpLand{0%{transform:scale(1.07)}55%{transform:scale(.98)}100%{transform:scale(1)}}
+@keyframes tpGlow{0%{box-shadow:0 0 0 rgba(111,200,247,0)}40%{box-shadow:0 0 26px rgba(111,200,247,.4)}100%{box-shadow:0 0 0 rgba(111,200,247,0)}}
+
 .ss-panel{
   padding:26px 28px;border-radius:26px;
   background:var(--ss-panel);
