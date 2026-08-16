@@ -18,87 +18,7 @@ Close the console window to stop the app; double-click the `.bat` again to relau
 
 > **Windows will show a SmartScreen warning** ("Windows protected your PC") the first time you run it — expected for an unsigned free hobby project, not a sign of a problem. Click **"More info"** → **"Run anyway"**. Only appears once per machine.
 
-Prefer to run from source instead (for development, or if you don't trust an unsigned `.exe`)? See **Running from Source** below.
-
----
-
-## Running from Source
-
-**1. Install Node.js** — [nodejs.org](https://nodejs.org), LTS version. Run the installer (Next → Next → Finish).
-
-**2. Clone the repo and install dependencies** (one time):
-```
-git clone https://github.com/gregdobs/Steam-Stats.git
-cd Steam-Stats
-npm install
-```
-
-**3. Get a free Steam Web API key** at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey). Use `localhost` as the domain name.
-
-**4. Set your Steam profile to Public** — in Steam: **Profile → Edit Profile → Privacy Settings → Game details → Public**. The app can't read your library otherwise.
-
-**5. Start the app:**
-```
-npm run dev
-```
-This runs the API server and the frontend together in a single terminal window. Once it's up, open:
-```
-http://steamstats.localhost:5173
-```
-and enter your API key and Steam profile URL (e.g. `https://steamcommunity.com/profiles/76561198044492736` or a vanity URL like `https://steamcommunity.com/id/yourname`).
-
-**6. Stop the app** — `Ctrl + C` in that terminal.
-
-That's the whole loop day-to-day: `npm run dev`, use the app, `Ctrl+C` when done.
-
-> `steamstats.localhost` is a real, working address, not a typo to fix — every modern browser resolves any `*.localhost` hostname straight to your own machine, no setup required. Plain `http://localhost:5173` opens the exact same app if you'd rather use that.
-
----
-
-### Alternate: running the server and frontend separately
-
-Useful for troubleshooting one side without restarting the other. Open two terminal windows:
-
-**Window 1 — API server:**
-```
-cd path\to\steam-dashboard
-node server.js
-```
-You should see:
-```
-🎮 Steam Stats Server running on http://steamstats.localhost:3001 (also reachable at http://localhost:3001)
-✅ Steam installation found: C:\Program Files (x86)\Steam
-```
-
-**Window 2 — frontend:**
-```
-cd path\to\steam-dashboard
-npx vite --port 5173
-```
-You should see:
-```
-  VITE v5.x.x  ready in xxx ms
-  ➜  Local:   http://localhost:5173/
-```
-(Vite's own banner always prints plain `localhost` — `http://steamstats.localhost:5173` still works against it, see below.)
-
-Then open `http://steamstats.localhost:5173` as before. Each window needs Ctrl+C separately to stop.
-
-| URL | What it is |
-|---|---|
-| http://steamstats.localhost:5173 | The dashboard — open this in your browser |
-| http://steamstats.localhost:3001 | API server — you never need to open this directly |
-
-Both are equally reachable as plain `http://localhost:5173` / `:3001` — `steamstats.localhost` is just the friendlier name the app itself uses (auto-opened by the packaged `.exe`, printed by the server on startup).
-
----
-
-### Running tests
-
-Algorithm logic (streaks, percentiles, snapshot-derived series) has a [Vitest](https://vitest.dev) suite in `src/utils/steam.test.js`:
-```
-npm test
-```
+Prefer to run from source instead (for development, or if you don't trust an unsigned `.exe`)? See **Running from Source** near the bottom of this README.
 
 ---
 
@@ -199,6 +119,123 @@ None of this is required — the app works fully off the Steam Web API alone, lo
 
 ---
 
+## Troubleshooting
+
+**"Cannot GET /"** on port 3001 — this is normal, that's the API server. Open port 5173 instead.
+
+**`steamstats.localhost` won't load** — this shouldn't happen on any current browser, but if it does, plain `http://localhost:5173` (dev) or `http://localhost:3001` (packaged app) opens the identical app.
+
+**"Steam rejected this API key"** — the key is wrong, or (if you just generated it) hasn't finished activating yet; give it a minute and retry. Double-check it at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey).
+
+**"No Steam profile found for ..."** — the profile URL or ID doesn't resolve to an account. This is almost always a typo or a copy-paste issue, not a privacy setting — try your full profile URL instead of a vanity name.
+
+**"Steam connected, but your library came back empty"** — this means **Game details** is still Private. That's a separate toggle from overall profile visibility: **Profile → Edit Profile → Privacy Settings → Game details → Public** (see Quick Start step 2), then hit Retry.
+
+**HowLongToBeat shows no data** — HLTB occasionally blocks automated requests. Try:
+1. Open [howlongtobeat.com](https://howlongtobeat.com) in your browser first
+2. Restart the app (close the console window, then double-click `Start Steam Stats.bat` again)
+3. Check **Settings → HowLongToBeat → Test** for details
+
+**Genre data is slow to fill in** — genres are fetched from the Steam Store API one at a time with a short delay between requests to avoid rate limits, so a big library can take a few minutes to fully populate on first load. It's cached after that.
+
+**Play Streak / Personal Percentile aren't showing anything** — these need a few days of actual use to build up snapshot history (2+ days for a streak, 7+ for a daily percentile, 21+ for a weekly one). Nothing's wrong — there's just not enough history yet.
+
+**Port already in use** — another process is using 5173 or 3001. Stop it with:
+```
+npx kill-port 5173
+npx kill-port 3001
+```
+
+**Steam not found** — go to **Settings → Local Steam Path** for diagnostics and a manual override.
+
+---
+
+## A note on HowLongToBeat
+
+HowLongToBeat doesn't offer a public API, so this app talks to an internal endpoint their own website uses — the same approach any unofficial HLTB integration takes. It's unofficial, best-effort, and can break if HLTB changes their site; when it does, completion-time estimates just won't show up rather than the app failing. There's a manual token override in **Settings → HowLongToBeat** as a fallback if auto-detection stops working.
+
+---
+
+## Running from Source
+
+**1. Install Node.js** — [nodejs.org](https://nodejs.org), LTS version. Run the installer (Next → Next → Finish).
+
+**2. Clone the repo and install dependencies** (one time):
+```
+git clone https://github.com/gregdobs/Steam-Stats.git
+cd Steam-Stats
+npm install
+```
+
+**3. Get a free Steam Web API key** at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey). Use `localhost` as the domain name.
+
+**4. Set your Steam profile to Public** — in Steam: **Profile → Edit Profile → Privacy Settings → Game details → Public**. The app can't read your library otherwise.
+
+**5. Start the app:**
+```
+npm run dev
+```
+This runs the API server and the frontend together in a single terminal window. Once it's up, open:
+```
+http://steamstats.localhost:5173
+```
+and enter your API key and Steam profile URL (e.g. `https://steamcommunity.com/profiles/76561198044492736` or a vanity URL like `https://steamcommunity.com/id/yourname`).
+
+**6. Stop the app** — `Ctrl + C` in that terminal.
+
+That's the whole loop day-to-day: `npm run dev`, use the app, `Ctrl+C` when done.
+
+> `steamstats.localhost` is a real, working address, not a typo to fix — every modern browser resolves any `*.localhost` hostname straight to your own machine, no setup required. Plain `http://localhost:5173` opens the exact same app if you'd rather use that.
+
+---
+
+### Alternate: running the server and frontend separately
+
+Useful for troubleshooting one side without restarting the other. Open two terminal windows:
+
+**Window 1 — API server:**
+```
+cd path\to\steam-dashboard
+node server.js
+```
+You should see:
+```
+🎮 Steam Stats Server running on http://steamstats.localhost:3001 (also reachable at http://localhost:3001)
+✅ Steam installation found: C:\Program Files (x86)\Steam
+```
+
+**Window 2 — frontend:**
+```
+cd path\to\steam-dashboard
+npx vite --port 5173
+```
+You should see:
+```
+  VITE v5.x.x  ready in xxx ms
+  ➜  Local:   http://localhost:5173/
+```
+(Vite's own banner always prints plain `localhost` — `http://steamstats.localhost:5173` still works against it, see below.)
+
+Then open `http://steamstats.localhost:5173` as before. Each window needs Ctrl+C separately to stop.
+
+| URL | What it is |
+|---|---|
+| http://steamstats.localhost:5173 | The dashboard — open this in your browser |
+| http://steamstats.localhost:3001 | API server — you never need to open this directly |
+
+Both are equally reachable as plain `http://localhost:5173` / `:3001` — `steamstats.localhost` is just the friendlier name the app itself uses (auto-opened by the packaged `.exe`, printed by the server on startup).
+
+---
+
+### Running tests
+
+Algorithm logic (streaks, percentiles, snapshot-derived series) has a [Vitest](https://vitest.dev) suite in `src/utils/steam.test.js`:
+```
+npm test
+```
+
+---
+
 ## Building a Distributable .exe
 
 Package the whole app into a folder anyone can run by double-clicking — no Node.js install required on their end.
@@ -230,43 +267,6 @@ Output lands in `release/`. Zip that whole folder — that's the distributable.
 **Why not a single file?** pkg's executable alone can't reliably include `node_modules` (native bindings, dynamic requires, and file-size bloat make that fragile). Shipping `server.js` + `dist/` + a minimal `node_modules` alongside a small bootstrap `.exe` is the standard, reliable pattern — the folder is still just one download, one zip, one double-click for whoever you send it to.
 
 **First build note:** the very first time you run `build:release`, pkg downloads a prebuilt Node.js binary (~40–80MB) to embed in the executable, and the script separately downloads a standalone `node.exe` for the release folder. Both need normal internet access and only happen once — pkg's download is cached in `~/.pkg-cache` afterward.
-
----
-
-## Troubleshooting
-
-**"Cannot GET /"** on port 3001 — this is normal, that's the API server. Open port 5173 instead.
-
-**`steamstats.localhost` won't load** — this shouldn't happen on any current browser, but if it does, plain `http://localhost:5173` (dev) or `http://localhost:3001` (packaged app) opens the identical app.
-
-**"Steam rejected this API key"** — the key is wrong, or (if you just generated it) hasn't finished activating yet; give it a minute and retry. Double-check it at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey).
-
-**"No Steam profile found for ..."** — the profile URL or ID doesn't resolve to an account. This is almost always a typo or a copy-paste issue, not a privacy setting — try your full profile URL instead of a vanity name.
-
-**"Steam connected, but your library came back empty"** — this means **Game details** is still Private. That's a separate toggle from overall profile visibility: **Profile → Edit Profile → Privacy Settings → Game details → Public** (see Quick Start step 4), then hit Retry.
-
-**HowLongToBeat shows no data** — HLTB occasionally blocks automated requests. Try:
-1. Open [howlongtobeat.com](https://howlongtobeat.com) in your browser first
-2. Restart the app (Ctrl+C, then `npm run dev` again)
-3. Check **Settings → HowLongToBeat → Test** for details
-
-**Genre data is slow to fill in** — genres are fetched from the Steam Store API one at a time with a short delay between requests to avoid rate limits, so a big library can take a few minutes to fully populate on first load. It's cached after that.
-
-**Play Streak / Personal Percentile aren't showing anything** — these need a few days of actual use to build up snapshot history (2+ days for a streak, 7+ for a daily percentile, 21+ for a weekly one). Nothing's wrong — there's just not enough history yet.
-
-**Port already in use** — another process is using 5173 or 3001. Stop it with:
-```
-npx kill-port 5173
-npx kill-port 3001
-```
-
-**Steam not found** — go to **Settings → Local Steam Path** for diagnostics and a manual override.
-
----
-
-## A note on HowLongToBeat
-
-HowLongToBeat doesn't offer a public API, so this app talks to an internal endpoint their own website uses — the same approach any unofficial HLTB integration takes. It's unofficial, best-effort, and can break if HLTB changes their site; when it does, completion-time estimates just won't show up rather than the app failing. There's a manual token override in **Settings → HowLongToBeat** as a fallback if auto-detection stops working.
 
 ---
 
