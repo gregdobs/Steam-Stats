@@ -629,10 +629,33 @@ function EmptyState({ timePeriod }) {
   );
 }
 
+// Distinct from EmptyState above: this fires when Steam returned ZERO owned
+// games at all, not just zero for the selected period. That combination
+// (connection succeeded, library is empty) is almost always the "Game
+// details" privacy toggle — a separate, easy-to-miss setting from overall
+// profile visibility — so it gets its own actionable message instead of
+// silently rendering like a quiet week.
+function EmptyLibraryState({ onRetry }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '96px 40px', color: 'var(--ss-ink3)' }}>
+      <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
+      <h3 style={{ fontSize: 19, marginBottom: 8, color: 'var(--ss-ink2)' }}>Steam connected, but your library came back empty</h3>
+      <p style={{ fontSize: 14, maxWidth: 440, margin: '0 auto', lineHeight: 1.6 }}>
+        This almost always means <strong>Game details</strong> is still set to Private —
+        a separate setting from your overall profile visibility. In Steam, go to{' '}
+        <strong>Profile → Edit Profile → Privacy Settings → Game details → Public</strong>, then retry.
+      </p>
+      <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={onRetry}>
+        Retry
+      </button>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const {
     ownedGames, getGamesForPeriod, gamesPlayed, timePeriod, setTimePeriod,
-    achCache, steamId, config,
+    achCache, steamId, config, loadData,
   } = useApp();
   const [selectedGame, setSelectedGame] = useState(null);
   const [selectedGameRect, setSelectedGameRect] = useState(null);
@@ -688,7 +711,9 @@ export default function Dashboard() {
 
   return (
     <div style={{ maxWidth: 1180, margin: '0 auto', padding: '34px 24px 96px', display: 'flex', flexDirection: 'column', gap: 40 }}>
-      {periodGames.length === 0 ? (
+      {ownedGames.length === 0 ? (
+        <EmptyLibraryState onRetry={() => loadData(config.apiKey, config.steamUrl)} />
+      ) : periodGames.length === 0 ? (
         <EmptyState timePeriod={timePeriod} />
       ) : (
         <>

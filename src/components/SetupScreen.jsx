@@ -94,10 +94,13 @@ export default function SetupScreen() {
               value={steamUrl}
               onChange={e => setSteamUrl(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="https://steamcommunity.com/profiles/76561198..."
+              placeholder="https://steamcommunity.com/id/yourname"
             />
             <p style={{ fontSize: 12, color: 'var(--ss-ink3)', marginTop: 6 }}>
-              Your profile must be set to <strong>Public</strong> in Steam privacy settings
+              A profile link (<code>/id/yourname</code> or <code>/profiles/765...</code>) or a bare 17-digit SteamID64
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--ss-ink3)', marginTop: 4 }}>
+              Requires <strong>Game details → Public</strong> in Steam's privacy settings — that's a separate toggle from your overall profile visibility
             </p>
           </div>
 

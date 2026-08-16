@@ -122,9 +122,14 @@ app.use(helmet({
 
 app.use(cors({
   // Scoped to the actual origins this app runs on — the Vite dev server
-  // (5173) and the packaged app serving itself (3001) — rather than
-  // allowing any origin to call this API.
-  origin: ['http://localhost:5173', 'http://localhost:3001', 'http://127.0.0.1:5173', 'http://127.0.0.1:3001'],
+  // (5173) and the packaged app serving itself (3001), each reachable by
+  // plain localhost or by the friendly steamstats.localhost alias (see
+  // bootstrap.cjs / README) — rather than allowing any origin to call
+  // this API.
+  origin: [
+    'http://localhost:5173', 'http://localhost:3001', 'http://127.0.0.1:5173', 'http://127.0.0.1:3001',
+    'http://steamstats.localhost:5173', 'http://steamstats.localhost:3001',
+  ],
 }));
 app.use(express.json());
 
@@ -161,7 +166,32 @@ app.use((req, res, next) => {
 
 // ─────────────────────────────────────────────
 // STEAM API PROXY
+//
+// Steam returns 403 for both a genuinely invalid key and a brand-new key
+// that hasn't finished activating yet — that's the single most common
+// first-run failure, and until this helper existed every proxy endpoint
+// masked it behind a generic 500, so the client fell back to guessing
+// (usually landing on "profile not found," which sent people to the wrong
+// setting). Forwarding Steam's real status + a targeted message lets the
+// client tell an auth problem apart from a lookup problem apart from a
+// network problem instead of collapsing all three into one message.
 // ─────────────────────────────────────────────
+function forwardSteamError(res, err) {
+  const status = err.response?.status;
+  if (status === 401 || status === 403) {
+    return res.status(status).json({
+      error: 'Steam rejected this API key. Double-check it at steamcommunity.com/dev/apikey — new keys can take a minute to activate.',
+      code: 'invalid_api_key',
+    });
+  }
+  if (!err.response) {
+    return res.status(502).json({
+      error: "Couldn't reach Steam's servers. Check your internet connection and try again.",
+      code: 'steam_unreachable',
+    });
+  }
+  res.status(status).json({ error: err.message, code: 'steam_error' });
+}
 
 app.get('/api/steam/resolve-vanity', async (req, res) => {
   const { apiKey, vanity } = req.query;
@@ -170,7 +200,7 @@ app.get('/api/steam/resolve-vanity', async (req, res) => {
     const response = await axios.get(url, { timeout: 8000 });
     res.json(response.data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    forwardSteamError(res, err);
   }
 });
 
@@ -181,7 +211,7 @@ app.get('/api/steam/player-summary', async (req, res) => {
     const response = await axios.get(url, { timeout: 10000 });
     res.json(response.data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    forwardSteamError(res, err);
   }
 });
 
@@ -192,7 +222,7 @@ app.get('/api/steam/owned-games', async (req, res) => {
     const response = await axios.get(url, { timeout: 15000 });
     res.json(response.data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    forwardSteamError(res, err);
   }
 });
 
@@ -203,7 +233,7 @@ app.get('/api/steam/recent-games', async (req, res) => {
     const response = await axios.get(url, { timeout: 10000 });
     res.json(response.data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    forwardSteamError(res, err);
   }
 });
 
@@ -1170,7 +1200,12 @@ if (distExists) {
 // defaults to 0.0.0.0 (all interfaces), which would expose the local Steam
 // data endpoints and settings routes to anyone else on the same network.
 app.listen(PORT, '127.0.0.1', () => {
-  console.log(`\n🎮 Steam Stats Server running on http://localhost:${PORT}`);
+  // steamstats.localhost is a real, working URL, not a placeholder — every
+  // modern browser (and this server's own CORS allowlist above) resolves
+  // any *.localhost hostname straight to loopback per RFC 6761, no hosts
+  // file or DNS setup required. See bootstrap.cjs for why plain "localhost"
+  // is deliberately kept for internal/non-browser use instead.
+  console.log(`\n🎮 Steam Stats Server running on http://steamstats.localhost:${PORT} (also reachable at http://localhost:${PORT})`);
   console.log(`💾 Data folder: ${DATA_DIR}`);
   const steamPaths = findSteamPaths();
   if (steamPaths.length > 0) {

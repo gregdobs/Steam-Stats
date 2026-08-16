@@ -8,6 +8,18 @@ function apiKeyHeaders(apiKey) {
   return { 'x-steam-api-key': apiKey };
 }
 
+// Shared by the four Steam auth endpoints below. Throws on a non-2xx
+// response using the server's own message (bad key, unreachable, etc. —
+// see forwardSteamError in server.js) instead of silently returning
+// null/[] and letting a downstream "profile not found"-style fallback
+// mask what actually went wrong.
+async function steamApiGet(path, apiKey) {
+  const res = await fetch(`${BASE}${path}`, { headers: apiKeyHeaders(apiKey) });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || `Steam API request failed (${res.status})`);
+  return data;
+}
+
 export function extractSteamId(input) {
   if (!input) return null;
   const trimmed = input.trim();
@@ -23,26 +35,22 @@ export function extractSteamId(input) {
 }
 
 export async function resolveVanityUrl(apiKey, vanityUrl) {
-  const res = await fetch(`${BASE}/steam/resolve-vanity?vanity=${vanityUrl}`, { headers: apiKeyHeaders(apiKey) });
-  const data = await res.json();
+  const data = await steamApiGet(`/steam/resolve-vanity?vanity=${vanityUrl}`, apiKey);
   return data?.response?.steamid || null;
 }
 
 export async function fetchPlayerSummary(apiKey, steamId) {
-  const res = await fetch(`${BASE}/steam/player-summary?steamId=${steamId}`, { headers: apiKeyHeaders(apiKey) });
-  const data = await res.json();
+  const data = await steamApiGet(`/steam/player-summary?steamId=${steamId}`, apiKey);
   return data?.response?.players?.[0] || null;
 }
 
 export async function fetchOwnedGames(apiKey, steamId) {
-  const res = await fetch(`${BASE}/steam/owned-games?steamId=${steamId}`, { headers: apiKeyHeaders(apiKey) });
-  const data = await res.json();
+  const data = await steamApiGet(`/steam/owned-games?steamId=${steamId}`, apiKey);
   return data?.response?.games || [];
 }
 
 export async function fetchRecentGames(apiKey, steamId) {
-  const res = await fetch(`${BASE}/steam/recent-games?steamId=${steamId}`, { headers: apiKeyHeaders(apiKey) });
-  const data = await res.json();
+  const data = await steamApiGet(`/steam/recent-games?steamId=${steamId}`, apiKey);
   return data?.response?.games || [];
 }
 

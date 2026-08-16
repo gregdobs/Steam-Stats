@@ -24,13 +24,15 @@ npm run dev
 ```
 This runs the API server and the frontend together in a single terminal window. Once it's up, open:
 ```
-http://localhost:5173
+http://steamstats.localhost:5173
 ```
 and enter your API key and Steam profile URL (e.g. `https://steamcommunity.com/profiles/76561198044492736` or a vanity URL like `https://steamcommunity.com/id/yourname`).
 
 **6. Stop the app** — `Ctrl + C` in that terminal.
 
 That's the whole loop day-to-day: `npm run dev`, use the app, `Ctrl+C` when done.
+
+> `steamstats.localhost` is a real, working address, not a typo to fix — every modern browser resolves any `*.localhost` hostname straight to your own machine, no setup required. Plain `http://localhost:5173` opens the exact same app if you'd rather use that.
 
 ---
 
@@ -45,7 +47,7 @@ node server.js
 ```
 You should see:
 ```
-🎮 Steam Stats Server running on http://localhost:3001
+🎮 Steam Stats Server running on http://steamstats.localhost:3001 (also reachable at http://localhost:3001)
 ✅ Steam installation found: C:\Program Files (x86)\Steam
 ```
 
@@ -59,13 +61,36 @@ You should see:
   VITE v5.x.x  ready in xxx ms
   ➜  Local:   http://localhost:5173/
 ```
+(Vite's own banner always prints plain `localhost` — `http://steamstats.localhost:5173` still works against it, see below.)
 
-Then open `http://localhost:5173` as before. Each window needs Ctrl+C separately to stop.
+Then open `http://steamstats.localhost:5173` as before. Each window needs Ctrl+C separately to stop.
 
 | URL | What it is |
 |---|---|
-| http://localhost:5173 | The dashboard — open this in your browser |
-| http://localhost:3001 | API server — you never need to open this directly |
+| http://steamstats.localhost:5173 | The dashboard — open this in your browser |
+| http://steamstats.localhost:3001 | API server — you never need to open this directly |
+
+Both are equally reachable as plain `http://localhost:5173` / `:3001` — `steamstats.localhost` is just the friendlier name the app itself uses (auto-opened by the packaged `.exe`, printed by the server on startup). See [Why `steamstats.localhost`?](#why-steamstatslocalhost) below if you're curious how that works without any setup.
+
+---
+
+### Why `steamstats.localhost`?
+
+Every hostname ending in `.localhost` is reserved by [RFC 6761](https://datatracker.ietf.org/doc/html/rfc6761) to always mean "this machine," and every modern browser (Chrome, Edge, Firefox) resolves it straight to loopback for free — no hosts file edit, no admin rights, no per-machine setup step. That made it the right fit for a friendlier URL than `localhost:3001`, over the two more obvious-looking options:
+
+- **`.dev`** is a real, Google-owned public TLD that's on the browser [HSTS preload list](https://hstspreload.org/) — the entire TLD is forced to HTTPS. A plain `http://` address on `.dev` doesn't just look wrong, it fails outright with no working certificate to serve.
+- **`.local`** is reserved for mDNS/Bonjour service discovery, not general-purpose hostnames — it can resolve unpredictably (or not at all) depending on what's running on the network, and would still need a hosts file edit to mean anything here.
+
+`.localhost` needed neither. `steamstats.localhost:3001` and `steamstats.localhost:5173` work today, for every user, with zero setup — that's why the server prints them and the packaged `.exe` opens them automatically.
+
+---
+
+### Running tests
+
+Algorithm logic (streaks, percentiles, snapshot-derived series) has a [Vitest](https://vitest.dev) suite in `src/utils/steam.test.js`:
+```
+npm test
+```
 
 ---
 
@@ -81,18 +106,21 @@ Then open `http://localhost:5173` as before. Each window needs Ctrl+C separately
 - **Desktop vs. Deck** — what share of your all-time hours were played on Steam Deck, when that's ever been the case.
 
 ### 📚 Library
-- Genre allocation and session-insight panels (session data requires local Steam data — see below)
-- Playtime distribution donut — click a bucket to filter the game table
-- Top 15 bar chart — click a bar to highlight in the table
-- Launch frequency vs. hours scatter plot — click a dot to filter
-- Full sortable game table with inline filter pills
+- Library utilization donut (played vs. untouched) plus derived stats — median hours on a played game, % of hours in your top 10, top game's share of your total time
+- "Time since last played" lanes — every played game bucketed by recency, dot size scaled to lifetime hours — click a dot to filter the table
+- Top 15 bar chart by lifetime hours — click a bar to highlight in the table
+- Genre allocation panel
+- Full sortable game table with inline filter pills, cross-filterable from every chart on the page
 
-### 📥 Backlog
-- Unplayed games list with a burn-down projection ("at your current pace, clearing your backlog would take ~X weeks") — uses real HowLongToBeat estimates where cached, falls back to a conservative flat estimate otherwise
+### 📥 Progress
+One page spanning your whole library, from untouched to overplayed:
+- Status spectrum across 7 buckets (Unplayed → No Estimate → Barely Started → In Progress → Getting There → Completed → Overplayer), badged 📥 · ❔ · 💤 · 🎮 · 🔥 · 🏁 · 🐙 — click a segment to filter
+- Backlog burn-down projection ("at your current pace, clearing your backlog would take ~X weeks") — uses real HowLongToBeat estimates where cached, falls back to a conservative flat estimate otherwise
 - Backlog momentum — whether your unplayed count is growing or shrinking over the last couple weeks
 - Backlog breakdown by genre
-- Backlog graveyard — the unplayed games that have sat untouched the longest, since Steam Stats started tracking them
-- "Pick for me" randomizer
+- Dormant longest — games you played and then set aside, ranked by how long it's been
+- "Furthest along" spotlight — the games closest to (or past) their HowLongToBeat completion estimate
+- Full game list, sortable by status, shortest-first, most playtime, or A–Z
 
 ### 🏆 Achievements
 - Completion % for up to 100 games
@@ -100,15 +128,11 @@ Then open `http://localhost:5173` as before. Each window needs Ctrl+C separately
 - Filter by Perfect / Almost / In Progress
 - Global achievement stats
 
-### 🎯 Completion
-- Your playtime vs. HowLongToBeat estimates
-- Badges: 💤 Barely Started · 🎮 In Progress · 🔥 Getting There · 🏁 Completed · 🐙 Overplayer
-
 ### 📈 History
-- Trend line chart from cached daily snapshots
-- Day-of-week pattern — average hours played per weekday, once ~2 weeks of history has built up
-- 52-week activity heatmap
-- Gets richer every day you open the app — this is also what powers the Dashboard's streak and percentile stats
+- Achievement unlocks over time — a month-by-month trend line built from Steam's own achievement-unlock timestamps, not local tracking, so it's populated from day one
+- "When you last touched each game" — every played game bucketed by last-played date
+- "Your Steam years" — unlocks per year, broken down by your top games
+- This is separate from the Dashboard's Play Streak / Personal Percentile, which do need a few days of local snapshot history to build up (see below)
 
 ---
 
@@ -160,7 +184,6 @@ If your install lives somewhere else, set it manually in **Settings → Local St
 
 | Data | What it unlocks |
 |---|---|
-| Launch count per game | "Launched 47×" stat, scatter plot, average-session-length estimate |
 | Last played timestamps | More accurate than the Steam API's |
 | Your custom tags | Shown on game cards |
 
@@ -206,7 +229,13 @@ Output lands in `release/`. Zip that whole folder — that's the distributable.
 
 **"Cannot GET /"** on port 3001 — this is normal, that's the API server. Open port 5173 instead.
 
-**"Profile not found"** — set your Steam Game Details privacy to Public (see Quick Start step 4).
+**`steamstats.localhost` won't load** — this shouldn't happen on any current browser, but if it does, plain `http://localhost:5173` (dev) or `http://localhost:3001` (packaged app) opens the identical app.
+
+**"Steam rejected this API key"** — the key is wrong, or (if you just generated it) hasn't finished activating yet; give it a minute and retry. Double-check it at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey).
+
+**"No Steam profile found for ..."** — the profile URL or ID doesn't resolve to an account. This is almost always a typo or a copy-paste issue, not a privacy setting — try your full profile URL instead of a vanity name.
+
+**"Steam connected, but your library came back empty"** — this means **Game details** is still Private. That's a separate toggle from overall profile visibility: **Profile → Edit Profile → Privacy Settings → Game details → Public** (see Quick Start step 4), then hit Retry.
 
 **HowLongToBeat shows no data** — HLTB occasionally blocks automated requests. Try:
 1. Open [howlongtobeat.com](https://howlongtobeat.com) in your browser first

@@ -159,7 +159,7 @@ export function AppProvider({ children }) {
 
       setLoadingPhase('Connecting to Steam...');
       const playerData = await fetchPlayerSummary(apiKey, steamId);
-      if (!playerData) throw new Error('Profile not found. Make sure your profile is set to Public.');
+      if (!playerData) throw new Error(`No Steam profile found for "${steamUrl.trim()}". Double-check the profile URL or ID — this is usually a typo, not a privacy setting.`);
       setProfile(playerData);
 
       setLoadingPhase('Loading your library...');

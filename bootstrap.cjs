@@ -58,6 +58,12 @@ function fail(message) {
 }
 
 // Poll localhost:3001 until the server responds, then open the browser.
+// Deliberately plain "localhost", not the steamstats.localhost alias used
+// below for the actual browser tab: *.localhost → loopback is a browser
+// convention (Chromium, Firefox, Edge all special-case it per RFC 6761),
+// not something Node's own resolver is guaranteed to honor the same way,
+// so this internal health poll stays on the one hostname that's always
+// reliable outside a browser.
 function waitForServerReady(callback, attemptsLeft = 50) {
   const req = http.get('http://localhost:3001/api/health', (res) => {
     res.resume();
@@ -66,7 +72,7 @@ function waitForServerReady(callback, attemptsLeft = 50) {
   req.on('error', () => {
     if (attemptsLeft <= 0) {
       console.log('\n⚠️  Server did not respond in time. It may still be starting —');
-      console.log('    try opening http://localhost:3001 manually in a moment.');
+      console.log('    try opening http://steamstats.localhost:3001 manually in a moment.');
       return;
     }
     setTimeout(() => waitForServerReady(callback, attemptsLeft - 1), 300);
@@ -74,8 +80,12 @@ function waitForServerReady(callback, attemptsLeft = 50) {
   req.setTimeout(1000, () => req.destroy());
 }
 
+// steamstats.localhost is a real, working URL here — every modern browser
+// resolves any *.localhost hostname to loopback with zero setup (no hosts
+// file edit, no admin rights), so this opens a friendlier address than
+// raw localhost:3001 without needing anything from the user.
 function openBrowser() {
-  const url = 'http://localhost:3001';
+  const url = 'http://steamstats.localhost:3001';
   const platform = process.platform;
   try {
     if (platform === 'win32') {

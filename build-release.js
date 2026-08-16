@@ -80,7 +80,7 @@ copyRecursive(path.join(__dirname, 'dist'), path.join(RELEASE_DIR, 'dist'));
 // 6. Install production-only node_modules directly into release folder
 //    Only server.js's actual runtime imports belong here — NOT the full
 //    dependency list from the main package.json, which includes frontend
-//    build-time packages (react, chart.js, vite, etc.) the server never
+//    build-time packages (react, vite, etc.) the server never
 //    touches at runtime. Keeping this minimal keeps the release small.
 console.log('\nInstalling production dependencies into release folder...');
 const mainPkgJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
@@ -159,7 +159,7 @@ function toLicenseEntries(pkgJsonPaths) {
   return entries;
 }
 
-const FRONTEND_BUNDLED_DEPS = ['react', 'react-dom', 'chart.js', 'react-chartjs-2'];
+const FRONTEND_BUNDLED_DEPS = ['react', 'react-dom'];
 const serverEntries = toLicenseEntries(listInstalledPackages(path.join(RELEASE_DIR, 'node_modules')));
 const frontendEntries = toLicenseEntries(collectRuntimeDepTree(path.join(__dirname, 'node_modules'), FRONTEND_BUNDLED_DEPS));
 
