@@ -499,8 +499,10 @@ export default function Progress() {
         </div>
       )}
 
-      {/* Full list */}
-      <div className="ss-panel">
+      {/* Full list — data-tilt-flat: this outer container is too large to
+          tilt as a whole without judder, but the GameStatusCards inside
+          are normal card-sized and keep their own individual tilt. */}
+      <div className="ss-panel" data-tilt-flat>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--ss-ink)' }}>
             {activeStatus ? STATUS_META[activeStatus].label : 'Everything else'} <span style={{ color: 'var(--ss-ink3)', fontWeight: 400 }}>({listGames.length})</span>

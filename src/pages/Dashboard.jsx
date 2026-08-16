@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
 import {
-  formatHours, minutesToHours, formatLastPlayed, loadSnapshots, getGameHeaderUrl,
+  formatHours, minutesToHours, formatLastPlayed, getGameHeaderUrl,
   computePlayStreak, computeWindowPercentile, computeDeckSplit,
   getDailyPlaytimeSeries, getDailyPlaytimeSeriesForGame,
 } from '../utils/steam.js';
@@ -127,14 +127,14 @@ function HeroCapsule({ game, timePeriod, topMinutes, active, dimmed, onToggle })
     <button
       onClick={onToggle}
       title={`${game.name} — ${formatHours(periodMinutes)}`}
+      className="ss-tilt"
       style={{
-        position: 'relative', flex: 1, minWidth: 0, aspectRatio: '2/3', padding: 0,
+        flex: 1, minWidth: 0, aspectRatio: '2/3', padding: 0,
         borderRadius: 16, overflow: 'hidden', cursor: 'pointer', background: 'var(--ss-inset)',
         border: active ? '1px solid var(--ss-chart-hi)' : '1px solid var(--ss-line)',
         boxShadow: active ? '0 20px 44px -18px var(--ss-chart-glow)' : '0 16px 34px -20px rgba(0,0,0,.9)',
-        transform: active ? 'translateY(-6px)' : 'none',
+        '--ss-lift': active ? '-6px' : '0px',
         opacity: dimmed ? 0.42 : 1,
-        transition: 'transform .22s cubic-bezier(.22,1,.36,1), box-shadow .22s, opacity .2s',
       }}
     >
       <GameCapsule appId={game.appid} name={game.name} />
@@ -321,7 +321,11 @@ function FocusCard({ game, timePeriod, periodMinutes, totalPeriodMinutes, steamI
   return (
     <article className="ss-panel" onClick={onClick} style={{ position: 'relative', padding: 26, display: 'flex', gap: 26, cursor: 'pointer', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', inset: 0, opacity: 'var(--ss-art-opacity)', backgroundImage: `url(${getGameHeaderUrl(game.appid)})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(28px) saturate(140%)', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', inset: 0, background: 'var(--ss-scrim)', pointerEvents: 'none' }} />
+      {/* Softened relative to the shared --ss-scrim token (used at full
+          strength on hero cards elsewhere) — at full strength this card
+          read noticeably darker than the plain-panel cards beside it in
+          the "In focus" row. */}
+      <div style={{ position: 'absolute', inset: 0, background: 'var(--ss-scrim)', opacity: 0.55, pointerEvents: 'none' }} />
       <div style={{ position: 'relative', width: 132, height: 198, flexShrink: 0, alignSelf: 'flex-start', borderRadius: 18, overflow: 'hidden', background: 'var(--ss-inset)', boxShadow: '0 18px 40px -14px rgba(0,0,0,.9)' }}>
         <GameCapsule appId={game.appid} name={game.name} />
       </div>
@@ -565,29 +569,48 @@ function TimeBreakdown({ periodGames, timePeriod, totalPeriodMinutes, activeFilt
   );
 }
 
-function FooterStats({ ownedGames, gamesPlayed, totalLaunches, avgSessionHours, localConfig, sinceDate }) {
+// "5 minutes ago"-style relative time — coarser formatters elsewhere
+// (formatLastPlayed) start at whole days, too blunt for a sync timestamp
+// that's typically minutes old.
+function formatSyncedAgo(timestamp) {
+  if (!timestamp) return null;
+  const mins = Math.floor((Date.now() - timestamp) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function FooterStats({ ownedGames, gamesPlayed, lastLoaded }) {
   // Desktop-vs-Deck folded in as one more chip here rather than its own
   // section — it's a static, all-time fact with nothing to do with it, so
   // it's sized to match (a stat, not a headline).
   const deckSplit = computeDeckSplit(ownedGames);
+  const totalLifetimeMinutes = ownedGames.reduce((s, g) => s + (g.playtime_forever || 0), 0);
+  const recentMinutes = ownedGames.reduce((s, g) => s + (g.playtime_2weeks || 0), 0);
   const items = [
     { value: ownedGames.length.toLocaleString(), label: 'games owned' },
-    { value: gamesPlayed.toLocaleString(), label: `ever played · ${Math.round((gamesPlayed / Math.max(ownedGames.length, 1)) * 100)}%` },
-    localConfig?.found && totalLaunches > 0 && { value: totalLaunches.toLocaleString(), label: 'launches' },
-    localConfig?.found && avgSessionHours > 0 && { value: `${avgSessionHours.toFixed(1)}h`, label: 'average session' },
-    deckSplit && { value: `${deckSplit.deckPct}%`, label: 'of hours on Steam Deck' },
+    { value: gamesPlayed.toLocaleString(), label: `with playtime · ${Math.round((gamesPlayed / Math.max(ownedGames.length, 1)) * 100)}%` },
+    { value: formatHours(totalLifetimeMinutes), label: 'lifetime, all games' },
+    deckSplit && { value: `${deckSplit.deckPct}%`, label: 'of lifetime on Steam Deck' },
+    { value: formatHours(recentMinutes), label: 'in the last two weeks' },
   ].filter(Boolean);
+  const syncedAgo = formatSyncedAgo(lastLoaded);
 
   return (
-    <section style={{ borderTop: '1px solid var(--ss-line)', paddingTop: 24, display: 'flex', flexWrap: 'wrap', gap: 44 }}>
-      {items.map(it => (
-        <div key={it.label}>
-          <div style={{ fontSize: 19, color: 'var(--ss-ink)' }}>{it.value}</div>
-          <div style={{ fontSize: 11.5, color: 'var(--ss-ink3)', marginTop: 4 }}>{it.label}</div>
-        </div>
-      ))}
-      <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--ss-ink3)', alignSelf: 'flex-end' }}>
-        Steam API{sinceDate ? ` · local snapshots since ${sinceDate}` : ''}
+    <section>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', gap: 14 }}>
+        {items.map(it => (
+          <div key={it.label} className="ss-panel" style={{ flex: '1 1 150px', minWidth: 150, padding: '18px 20px' }}>
+            <div style={{ fontSize: 26, fontWeight: 600, color: 'var(--ss-ink)' }}>{it.value}</div>
+            <div style={{ fontSize: 12, color: 'var(--ss-ink3)', marginTop: 6 }}>{it.label}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 14, fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: 'var(--ss-ink4)' }}>
+        Steam Web API · Playtime + Achievements{syncedAgo ? ` · Synced ${syncedAgo}` : ''}
       </div>
     </section>
   );
@@ -609,7 +632,7 @@ function EmptyState({ timePeriod }) {
 export default function Dashboard() {
   const {
     ownedGames, getGamesForPeriod, gamesPlayed, timePeriod, setTimePeriod,
-    localConfig, achCache, steamId,
+    achCache, steamId, config,
   } = useApp();
   const [selectedGame, setSelectedGame] = useState(null);
   const [selectedGameRect, setSelectedGameRect] = useState(null);
@@ -654,17 +677,6 @@ export default function Dashboard() {
 
   const totalPeriodMinutes = periodGames.reduce((s, g) => s + getPeriodMinutes(g, timePeriod), 0);
   const filteredGame = activeFilter != null ? periodGames.find(g => g.appid === activeFilter) : null;
-
-  const avgSessionHours = ownedGames.reduce((sum, g) => {
-    if (g.launchCount && g.playtime_forever) return sum + (g.playtime_forever / 60 / g.launchCount);
-    return sum;
-  }, 0) / Math.max(ownedGames.filter(g => g.launchCount).length, 1);
-  const totalLaunches = ownedGames.reduce((sum, g) => sum + (g.launchCount || 0), 0);
-
-  const firstSnapshotDate = steamId ? loadSnapshots(steamId)[0]?.date : null;
-  const sinceDate = firstSnapshotDate
-    ? new Date(firstSnapshotDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
-    : null;
 
   const heroGame = periodGames[0];
   // Selecting a game anywhere (hero capsule, Recent-vs-lifetime row, a
@@ -726,8 +738,7 @@ export default function Dashboard() {
 
           <FooterStats
             ownedGames={ownedGames} gamesPlayed={gamesPlayed}
-            totalLaunches={totalLaunches} avgSessionHours={avgSessionHours}
-            localConfig={localConfig} sinceDate={sinceDate}
+            lastLoaded={config?.lastLoaded}
           />
 
           {selectedGame && (

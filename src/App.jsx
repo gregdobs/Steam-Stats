@@ -2,6 +2,7 @@ import { useApp } from './hooks/useAppContext.jsx';
 import Navbar from './components/Navbar.jsx';
 import SetupScreen from './components/SetupScreen.jsx';
 import AuraBackground from './components/AuraBackground.jsx';
+import GlassTilt from './components/GlassTilt.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Library from './pages/Library.jsx';
 import Progress from './pages/Progress.jsx';
@@ -61,6 +62,7 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--ss-bg)' }}>
       <AuraBackground />
+      <GlassTilt />
       <div style={{ position: 'relative', zIndex: 1 }}>
         <Navbar />
         <main><PageContent /></main>

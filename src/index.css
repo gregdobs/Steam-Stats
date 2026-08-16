@@ -20,10 +20,11 @@ h1,h2,h3,h4,.heading{font-family:var(--font-display);font-weight:600;line-height
 .animate-fadeIn{animation:fadeIn 0.4s ease both;}
 .animate-fadeInFast{animation:fadeInFast 0.2s ease both;}
 .skeleton{background:linear-gradient(90deg,var(--ss-inset) 25%,var(--ss-btn-hi) 50%,var(--ss-inset) 75%);background-size:1000px 100%;animation:shimmer 1.5s infinite;border-radius:10px;}
-.card{background:var(--ss-panel);border:1px solid var(--ss-line-soft);border-radius:20px;box-shadow:var(--ss-shadow);transition:all 0.2s ease;}
+.card{background:var(--ss-panel);border:1px solid var(--ss-line-soft);border-radius:20px;box-shadow:var(--ss-shadow);}
 .card:hover{border-color:var(--ss-line);}
 .card-elevated{background:var(--ss-panel-hi);border:1px solid var(--ss-line);border-radius:20px;box-shadow:var(--ss-shadow);}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:14px;font-family:var(--font-body);font-size:14px;font-weight:500;border:none;cursor:pointer;transition:all 0.15s ease;white-space:nowrap;}
+.btn:hover{transform:translateY(-1px);}
 .btn:active{transform:scale(0.97);}
 .btn-primary{background:var(--ss-accent);color:var(--ss-bg);}
 .btn-primary:hover{filter:brightness(1.1);box-shadow:0 0 24px var(--ss-chart-glow);}
@@ -174,5 +175,46 @@ body{font-variant-numeric:tabular-nums;}
   cursor:pointer;transition:all .15s;
   background:var(--ss-btn);border:1px solid var(--ss-line);color:var(--ss-ink2);
 }
-.ss-pill:hover{background:var(--ss-btn-hi);color:var(--ss-ink);}
+.ss-pill:hover{background:var(--ss-btn-hi);color:var(--ss-ink);transform:translateY(-1px);}
 .ss-pill.active{background:var(--ss-pill-bg);border-color:var(--ss-pill-line);color:var(--ss-pill-ink);}
+
+/* ============================================================
+   Liquid-glass cursor interaction — a gentle 3D tilt on card
+   surfaces plus a light sheen whose brightness tracks how far the
+   card is currently tilted (not raw cursor position — no
+   spotlight-follows-cursor highlight). The same formula for every
+   card is what makes this read as one consistent material instead
+   of each card reacting differently. GlassTilt.jsx drives the
+   --ss-tilt-* custom properties via one delegated pointermove
+   listener (skipped on touch/coarse pointers and
+   prefers-reduced-motion) — these rules just render whatever it
+   sets and fall back to a neutral, motionless state otherwise.
+   Only transform/opacity ever animate here (compositor-only, no
+   layout/paint work per frame) so tracking stays smooth well past
+   60fps. .ss-tilt is a bare opt-in for bespoke cards that already
+   own their background/border (e.g. Dashboard's hero capsules) —
+   those set --ss-lift instead of their own `transform` so this
+   rule's transform stays the single source of truth. Opt a
+   surface out entirely with data-no-tilt (floating detail panels
+   meant for reading, not admiring).
+   ============================================================ */
+.ss-panel, .ss-panel-hi, .card, .card-elevated, .ss-tilt {
+  position: relative;
+  transform: perspective(1000px) rotateX(var(--ss-tilt-rx,0deg)) rotateY(var(--ss-tilt-ry,0deg)) scale(var(--ss-tilt-s,1)) translateY(var(--ss-lift,0px));
+  transition: background .2s ease, border-color .2s ease, box-shadow .2s ease, opacity .2s ease, transform var(--ss-tilt-t, .5s cubic-bezier(.16,1,.3,1));
+  will-change: transform;
+}
+.ss-panel::before, .ss-panel-hi::before, .card::before, .card-elevated::before, .ss-tilt::before {
+  content: '';
+  position: absolute; inset: 0; border-radius: inherit;
+  background: linear-gradient(125deg, rgba(255,255,255,.5), transparent 55%);
+  opacity: var(--ss-tilt-lit, 0);
+  transition: opacity .3s ease;
+  pointer-events: none;
+  will-change: opacity;
+}
+[data-no-tilt]::before { content: none; }
+@media (prefers-reduced-motion: reduce) {
+  .ss-panel, .ss-panel-hi, .card, .card-elevated, .ss-tilt { transform: none; }
+  .ss-panel::before, .ss-panel-hi::before, .card::before, .card-elevated::before, .ss-tilt::before { content: none; }
+}

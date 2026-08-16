@@ -762,8 +762,8 @@ export function computeYearlyUnlocks(achCache, ownedGames) {
 // LIBRARY DERIVED STATS
 //
 // Three small facts about the shape of a library that aren't derivable at a
-// glance from the raw game list: how concentrated the hours are, and how far
-// off "half the library played" actually is.
+// glance from the raw game list: how concentrated the hours are overall,
+// and which single game that concentration actually points to.
 // ─────────────────────────────────────────────
 export function computeLibraryDerivedStats(ownedGames) {
   const played = ownedGames.filter(g => g.playtime_forever > 0);
@@ -773,17 +773,17 @@ export function computeLibraryDerivedStats(ownedGames) {
     : (hours[hours.length / 2 - 1] + hours[hours.length / 2]) / 2;
 
   const totalHours = played.reduce((s, g) => s + g.playtime_forever, 0) / 60;
-  const top10Hours = [...played]
-    .sort((a, b) => b.playtime_forever - a.playtime_forever)
-    .slice(0, 10)
-    .reduce((s, g) => s + g.playtime_forever, 0) / 60;
+  const byHoursDesc = [...played].sort((a, b) => b.playtime_forever - a.playtime_forever);
+  const top10Hours = byHoursDesc.slice(0, 10).reduce((s, g) => s + g.playtime_forever, 0) / 60;
   const top10Pct = totalHours > 0 ? Math.round((top10Hours / totalHours) * 100) : 0;
 
-  // How many more never-played games would need launching to get half the
-  // OWNED library played — 0 once already at or past that mark.
-  const gamesToHit50PctPlayed = Math.max(0, Math.ceil(ownedGames.length * 0.5) - played.length);
+  // The single most-played game and its share of all played hours — turns
+  // the abstract "concentration" above into one concrete, personal fact.
+  const topGame = byHoursDesc[0] ?? null;
+  const topGameName = topGame?.name ?? null;
+  const topGamePct = topGame && totalHours > 0 ? Math.round((topGame.playtime_forever / 60 / totalHours) * 100) : 0;
 
-  return { medianHours, top10Pct, gamesToHit50PctPlayed };
+  return { medianHours, top10Pct, topGameName, topGamePct };
 }
 
 // ─────────────────────────────────────────────

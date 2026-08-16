@@ -56,6 +56,7 @@ export default function DetailSheet({ open, onClose, anchorRect, width = 380, ma
         ref={panelRef}
         tabIndex={-1}
         className="ss-panel"
+        data-no-tilt
         style={{
           position: 'absolute',
           top: pos?.top ?? 0, left: pos?.left ?? 0,

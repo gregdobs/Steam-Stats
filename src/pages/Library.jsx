@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
 import { formatHours, formatLastPlayed, daysSincePlayed, recencyBucket, RECENCY_BUCKETS, computeLibraryDerivedStats } from '../utils/steam.js';
-import { GameHeader } from '../components/GameImage.jsx';
+import { GameHeader, GameCapsule } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
 import GenreAllocation from '../components/GenreAllocation.jsx';
 import GameHoverCard from '../components/GameHoverCard.jsx';
@@ -147,15 +147,15 @@ function DistributionDonut({ games, activeFilter, onFilter }) {
 
 // ── Derived stat chips ──────────────────────────────────────────────────────
 function DerivedStats({ ownedGames }) {
-  const { medianHours, top10Pct, gamesToHit50PctPlayed } = computeLibraryDerivedStats(ownedGames);
+  const { medianHours, top10Pct, topGameName, topGamePct } = computeLibraryDerivedStats(ownedGames);
   const items = [
     { label: 'Median hours on a played game', value: medianHours >= 10 ? `${Math.round(medianHours)}h` : `${medianHours.toFixed(1)}h` },
     { label: '% of hours in top 10', value: `${top10Pct}%` },
-    {
-      label: 'Games to launch for 50% played',
-      value: gamesToHit50PctPlayed === 0 ? 'Already there' : gamesToHit50PctPlayed,
+    topGameName && {
+      label: `of your hours are in ${topGameName}`,
+      value: `${topGamePct}%`,
     },
-  ];
+  ].filter(Boolean);
   return (
     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--ss-line-soft)' }}>
       {items.map(it => (
@@ -173,6 +173,10 @@ function dotSize(game) {
   const hours = (game.playtime_forever || 0) / 60;
   return Math.max(6, Math.min(22, Math.round(6 + Math.sqrt(hours) * 2.4)));
 }
+
+// Below this, a cropped cover is too small to read as art — it just looks
+// like a dark smudge — so small dots fall back to the plain colour dot.
+const DOT_IMAGE_THRESHOLD = 14;
 
 function RecencyLanes({ games, activeFilter, onFilter }) {
   const { achCache } = useApp();
@@ -202,6 +206,7 @@ function RecencyLanes({ games, activeFilter, onFilter }) {
               {lane.games.slice(0, MAX_DOTS).map(g => {
                 const size = dotSize(g);
                 const isSel = activeFilter?.type === 'game' && activeFilter.value === g.appid;
+                const showImage = size >= DOT_IMAGE_THRESHOLD;
                 return (
                   <div
                     key={g.appid}
@@ -210,12 +215,15 @@ function RecencyLanes({ games, activeFilter, onFilter }) {
                     onMouseLeave={clearHover}
                     style={{
                       width: size, height: size, borderRadius: '50%', cursor: 'pointer',
-                      background: isSel ? 'var(--ss-chart-hi)' : chartRgba(0.55),
+                      overflow: 'hidden', flexShrink: 0,
+                      background: showImage ? 'var(--ss-inset)' : (isSel ? 'var(--ss-chart-hi)' : chartRgba(0.55)),
                       border: isSel ? '2px solid var(--ss-accent)' : '1px solid var(--ss-line)',
                       opacity: activeFilter?.type === 'game' && !isSel ? 0.3 : 1,
                       transition: 'opacity 0.15s, transform 0.1s',
                     }}
-                  />
+                  >
+                    {showImage && <GameCapsule appId={g.appid} name={g.name} />}
+                  </div>
                 );
               })}
               {lane.games.length > MAX_DOTS && (
@@ -242,9 +250,14 @@ function RecencyLanes({ games, activeFilter, onFilter }) {
 
 // ── Interactive SVG Bar Chart (top 15) ────────────────────────────────────
 function TopGamesBar({ games, activeFilter, onFilter }) {
+  const { achCache } = useApp();
   const [hovered, setHovered] = useState(null);
+  const [hoverGame, setHoverGame] = useState(null);
+  const [hoverRect, setHoverRect] = useState(null);
   const top = games.slice(0, 15);
   const maxVal = Math.max(...top.map(g => g.playtime_forever || 0), 1);
+
+  const clearHover = () => { setHovered(null); setHoverGame(null); setHoverRect(null); };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -258,8 +271,15 @@ function TopGamesBar({ games, activeFilter, onFilter }) {
         return (
           <div key={game.appid}
             onClick={() => onFilter(isSel ? null : { type: 'game', value: game.appid, label: game.name })}
-            onMouseEnter={() => setHovered(game.appid)}
-            onMouseLeave={() => setHovered(null)}
+            onMouseEnter={(e) => {
+              setHovered(game.appid); setHoverGame(game);
+              // Anchor to the cursor, not the row: the row spans the full
+              // panel width, so anchoring to its rect put every hover card
+              // in the same spot (clamped to the row's left edge) right on
+              // top of the game name it was meant to describe.
+              setHoverRect({ top: e.clientY, bottom: e.clientY, left: e.clientX, right: e.clientX });
+            }}
+            onMouseLeave={clearHover}
             role="button" tabIndex={0}
             title={`${game.name} — ${hours >= 100 ? Math.round(hours) : hours.toFixed(1)}h — click to filter`}
             onKeyDown={e => e.key === 'Enter' && onFilter(isSel ? null : { type: 'game', value: game.appid, label: game.name })}
@@ -289,6 +309,7 @@ function TopGamesBar({ games, activeFilter, onFilter }) {
           </div>
         );
       })}
+      <GameHoverCard game={hoverGame} achData={hoverGame ? achCache[hoverGame.appid] : null} anchorRect={hoverRect} />
     </div>
   );
 }
@@ -376,7 +397,7 @@ export default function Library() {
         </div>
 
         <div className="ss-panel">
-          <SectionHeading title="Recency lanes" />
+          <SectionHeading title="Time since last played" />
           <p style={{ fontSize: 12, color: 'var(--ss-ink3)', marginTop: -12, marginBottom: 18 }}>
             Every played game bucketed by how long since you last opened it. Click a dot to filter the table below.
           </p>
@@ -396,8 +417,10 @@ export default function Library() {
           cold cache; it shouldn't be the first thing the page makes you wait on. */}
       <GenreAllocation activeFilter={activeFilter} onFilter={handleFilter} />
 
-      {/* Game table */}
-      <div className="ss-panel" ref={tableRef}>
+      {/* Game table — data-no-tilt: a tall, text-dense table is for reading
+          rows, not tilting; a 3D rotation this size would swing the far
+          edges through far more pixels than the same angle does on a card. */}
+      <div className="ss-panel" ref={tableRef} data-no-tilt>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--ss-ink)' }}>

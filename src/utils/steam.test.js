@@ -107,16 +107,17 @@ describe('computeMonthlyUnlocks', () => {
 });
 
 describe('computeLibraryDerivedStats', () => {
-  it('returns zeros for an empty library', () => {
-    expect(computeLibraryDerivedStats([])).toEqual({ medianHours: 0, top10Pct: 0, gamesToHit50PctPlayed: 0 });
+  it('returns zeros and no top game for an empty library', () => {
+    expect(computeLibraryDerivedStats([])).toEqual({ medianHours: 0, top10Pct: 0, topGameName: null, topGamePct: 0 });
   });
 
-  it('returns zeros when nothing has been played, and needs half the library launched', () => {
+  it('returns zeros and no top game when nothing has been played', () => {
     const ownedGames = [{ appid: 1, playtime_forever: 0 }, { appid: 2, playtime_forever: 0 }];
     const result = computeLibraryDerivedStats(ownedGames);
     expect(result.medianHours).toBe(0);
     expect(result.top10Pct).toBe(0);
-    expect(result.gamesToHit50PctPlayed).toBe(1); // ceil(2*0.5) - 0
+    expect(result.topGameName).toBe(null);
+    expect(result.topGamePct).toBe(0);
   });
 
   it('computes the median for an odd-length list of played games', () => {
@@ -138,12 +139,14 @@ describe('computeLibraryDerivedStats', () => {
     expect(computeLibraryDerivedStats(ownedGames).medianHours).toBe(7.5);
   });
 
-  it('reports 0 games needed once half the library is already played', () => {
+  it('identifies the single most-played game and its share of total hours', () => {
     const ownedGames = [
-      { appid: 1, playtime_forever: 60 }, { appid: 2, playtime_forever: 60 },
-      { appid: 3, playtime_forever: 0 }, { appid: 4, playtime_forever: 0 },
+      { appid: 1, name: 'Big Game', playtime_forever: 600 },   // 10h
+      { appid: 2, name: 'Small Game', playtime_forever: 200 }, // ~3.33h
     ];
-    expect(computeLibraryDerivedStats(ownedGames).gamesToHit50PctPlayed).toBe(0);
+    const result = computeLibraryDerivedStats(ownedGames);
+    expect(result.topGameName).toBe('Big Game');
+    expect(result.topGamePct).toBe(75); // 10 / (10 + 3.33)
   });
 
   it('caps top10Pct concentration correctly with fewer than 10 played games', () => {
