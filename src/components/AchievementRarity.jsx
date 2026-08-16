@@ -66,7 +66,7 @@ export default function AchievementRarity({ games, achCache, onSelect }) {
           return (
             <button
               key={`${a.appid}-${a.apiname}`}
-              onClick={() => onSelect?.(a)}
+              onClick={(e) => onSelect?.(a, e)}
               style={{
                 display: 'flex', gap: 12, alignItems: 'center', padding: '10px 12px',
                 background: 'var(--ss-inset)', border: '1px solid var(--ss-line-soft)', borderRadius: 14,

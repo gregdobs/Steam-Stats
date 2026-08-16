@@ -88,7 +88,9 @@ export default function Achievements() {
   const [filter, setFilter]       = useState('all');
   const [sortBy, setSortBy]       = useState('pct');
   const [selectedGame, setSelectedGame] = useState(null);
+  const [selectedGameRect, setSelectedGameRect] = useState(null);
   const [selectedAchievement, setSelectedAchievement] = useState(null);
+  const [selectedAchievementRect, setSelectedAchievementRect] = useState(null);
 
   const playedGames = ownedGames
     .filter(g => g.playtime_forever > 0)
@@ -107,8 +109,14 @@ export default function Achievements() {
 
   const achData = achCache;
 
-  const handleSelect = useCallback((game) => {
+  const handleSelect = useCallback((game, e) => {
     setSelectedGame(prev => prev?.appid === game.appid ? null : game);
+    setSelectedGameRect(e ? e.currentTarget.getBoundingClientRect() : null);
+  }, []);
+
+  const handleSelectAchievement = useCallback((achievement, e) => {
+    setSelectedAchievement(achievement);
+    setSelectedAchievementRect(e ? e.currentTarget.getBoundingClientRect() : null);
   }, []);
 
   // Scoped to this page's games — see loadedCount comment above for why.
@@ -183,7 +191,7 @@ export default function Achievements() {
         ))}
       </div>
 
-      <AchievementRarity games={playedGames} achCache={achData} onSelect={setSelectedAchievement} />
+      <AchievementRarity games={playedGames} achCache={achData} onSelect={handleSelectAchievement} />
 
       {/* Filters + sort */}
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -243,6 +251,7 @@ export default function Achievements() {
         <GameDetailPanel
           game={selectedGame}
           achData={achData[selectedGame.appid]}
+          anchorRect={selectedGameRect}
           onClose={() => setSelectedGame(null)}
         />
       )}
@@ -251,6 +260,7 @@ export default function Achievements() {
         <AchievementDetailPanel
           achievement={selectedAchievement}
           achData={achData[selectedAchievement.appid]}
+          anchorRect={selectedAchievementRect}
           onClose={() => setSelectedAchievement(null)}
         />
       )}

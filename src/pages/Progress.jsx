@@ -257,6 +257,7 @@ export default function Progress() {
   const [sortBy, setSortBy] = useState('status');
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
   const [selectedGame, setSelectedGame] = useState(null);
+  const [selectedGameRect, setSelectedGameRect] = useState(null);
 
   const projection = computeBacklogProjection(ownedGames, steamId, hltbCache);
   const unplayedGames = projection.unplayedGames || ownedGames.filter(g => !g.playtime_forever);
@@ -319,8 +320,9 @@ export default function Progress() {
     return () => { cancelled = true; };
   }, [visibleCount, ownedGames.length]);
 
-  const handleSelect = useCallback((game) => {
+  const handleSelect = useCallback((game, e) => {
     setSelectedGame(prev => prev?.appid === game.appid ? null : game);
+    setSelectedGameRect(e ? e.currentTarget.getBoundingClientRect() : null);
   }, []);
 
   const classified = [...unplayedGames, ...visiblePlayed].map(g => ({
@@ -543,6 +545,7 @@ export default function Progress() {
           game={selectedGame}
           achData={achCache[selectedGame.appid]}
           hltbData={hltbCache[selectedGame.name]}
+          anchorRect={selectedGameRect}
           onClose={() => setSelectedGame(null)}
         />
       )}

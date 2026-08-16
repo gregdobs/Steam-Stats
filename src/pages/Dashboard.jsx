@@ -524,7 +524,7 @@ function TimeBreakdown({ periodGames, timePeriod, totalPeriodMinutes, activeFilt
         {drillGame && (
           <TimeBreakdownDrill
             game={drillGame} timePeriod={timePeriod} totalPeriodMinutes={totalPeriodMinutes}
-            onOpen={() => onOpenGame(drillGame)}
+            onOpen={(e) => onOpenGame(drillGame, e)}
             onClear={() => onToggleFilter(drillGame.appid)}
           />
         )}
@@ -612,6 +612,7 @@ export default function Dashboard() {
     localConfig, achCache, steamId,
   } = useApp();
   const [selectedGame, setSelectedGame] = useState(null);
+  const [selectedGameRect, setSelectedGameRect] = useState(null);
   const [activeFilter, setActiveFilter] = useState(null);
 
   // Period-toggle state — moved here from Navbar, since this is the only
@@ -638,8 +639,9 @@ export default function Dashboard() {
   // Clear selection when period changes
   useEffect(() => { setSelectedGame(null); setActiveFilter(null); }, [timePeriod]);
 
-  const handleSelectGame = useCallback((game) => {
+  const handleSelectGame = useCallback((game, e) => {
     setSelectedGame(prev => prev?.appid === game.appid ? null : game);
+    setSelectedGameRect(e ? e.currentTarget.getBoundingClientRect() : null);
   }, []);
 
   const toggleFilter = useCallback((appid) => {
@@ -705,12 +707,12 @@ export default function Dashboard() {
                 game={focusGame} timePeriod={timePeriod}
                 periodMinutes={getPeriodMinutes(focusGame, timePeriod)}
                 totalPeriodMinutes={totalPeriodMinutes} steamId={steamId}
-                onClick={() => handleSelectGame(focusGame)}
+                onClick={(e) => handleSelectGame(focusGame, e)}
               />
               {alsoActive.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {alsoActive.map(g => (
-                    <ActiveRow key={g.appid} game={g} timePeriod={timePeriod} onClick={() => handleSelectGame(g)} />
+                    <ActiveRow key={g.appid} game={g} timePeriod={timePeriod} onClick={(e) => handleSelectGame(g, e)} />
                   ))}
                 </div>
               )}
@@ -732,6 +734,7 @@ export default function Dashboard() {
             <GameDetailPanel
               game={selectedGame}
               achData={achCache[selectedGame.appid]}
+              anchorRect={selectedGameRect}
               onClose={() => setSelectedGame(null)}
             />
           )}

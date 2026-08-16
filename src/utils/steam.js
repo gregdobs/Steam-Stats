@@ -720,9 +720,9 @@ export function computeMonthlyUnlocks(achCache, ownedGames) {
     }));
 }
 
-// Segments are relative to the same 3 globally-top games in every year (not
-// each year's own top 3) so the legend stays consistent across the whole
-// chart instead of relabeling itself year to year.
+// Segments are relative to the same top games globally (not each year's own
+// top games) so the legend stays consistent across the whole chart instead
+// of relabeling itself year to year.
 export function computeYearlyUnlocks(achCache, ownedGames) {
   const nameByAppId = new Map(ownedGames.map(g => [String(g.appid), g.name]));
   const byYear = new Map(); // year (number) -> Map<appid, count>
@@ -740,7 +740,7 @@ export function computeYearlyUnlocks(achCache, ownedGames) {
 
   const topAppIds = [...globalTotals.entries()]
     .sort(([, a], [, b]) => b - a)
-    .slice(0, 3)
+    .slice(0, 5)
     .map(([appid]) => appid);
 
   return [...byYear.entries()]

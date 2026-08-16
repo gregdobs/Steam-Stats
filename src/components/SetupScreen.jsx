@@ -21,7 +21,7 @@ export default function SetupScreen() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'var(--bg-primary)',
+      background: 'var(--ss-bg)',
       padding: 24,
     }}>
       <div style={{ width: '100%', maxWidth: 480 }}>
@@ -30,19 +30,19 @@ export default function SetupScreen() {
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <div style={{
             width: 64, height: 64, borderRadius: '50%',
-            background: 'var(--accent-blue-dim)',
+            background: 'var(--ss-pill-bg)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             margin: '0 auto 20px',
           }}>
-            <svg width="30" height="30" viewBox="0 0 20 20" fill="none" stroke="var(--accent-blue)" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="10" r="7.2"></circle><path d="M10 5.4V10l3 2"></path></svg>
+            <svg width="30" height="30" viewBox="0 0 20 20" fill="none" stroke="var(--ss-accent)" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="10" r="7.2"></circle><path d="M10 5.4V10l3 2"></path></svg>
           </div>
           <h1 style={{
             fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600,
-            color: 'var(--text-primary)', letterSpacing: '-0.5px', marginBottom: 8
+            color: 'var(--ss-ink)', letterSpacing: '-0.5px', marginBottom: 8
           }}>
             Steam Stats
           </h1>
-          <p style={{ fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          <p style={{ fontSize: 15, color: 'var(--ss-ink2)', lineHeight: 1.6 }}>
             A best-in-class view of your gaming life.<br />
             Connect your Steam account to get started.
           </p>
@@ -54,7 +54,7 @@ export default function SetupScreen() {
           <div style={{ marginBottom: 24 }}>
             <label style={{
               display: 'block', fontSize: 13, fontWeight: 600,
-              color: 'var(--text-secondary)', marginBottom: 8, letterSpacing: '0.3px',
+              color: 'var(--ss-ink2)', marginBottom: 8, letterSpacing: '0.3px',
               textTransform: 'uppercase'
             }}>
               Steam Web API Key
@@ -67,13 +67,13 @@ export default function SetupScreen() {
               onKeyDown={handleKeyDown}
               placeholder="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
             />
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+            <p style={{ fontSize: 12, color: 'var(--ss-ink3)', marginTop: 6 }}>
               Get your free key at{' '}
               <a
                 href="https://steamcommunity.com/dev/apikey"
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ color: 'var(--accent-blue)', textDecoration: 'none' }}
+                style={{ color: 'var(--ss-accent)', textDecoration: 'none' }}
               >
                 steamcommunity.com/dev/apikey
               </a>
@@ -83,7 +83,7 @@ export default function SetupScreen() {
           <div style={{ marginBottom: 28 }}>
             <label style={{
               display: 'block', fontSize: 13, fontWeight: 600,
-              color: 'var(--text-secondary)', marginBottom: 8, letterSpacing: '0.3px',
+              color: 'var(--ss-ink2)', marginBottom: 8, letterSpacing: '0.3px',
               textTransform: 'uppercase'
             }}>
               Steam Profile URL or ID
@@ -96,7 +96,7 @@ export default function SetupScreen() {
               onKeyDown={handleKeyDown}
               placeholder="https://steamcommunity.com/profiles/76561198..."
             />
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+            <p style={{ fontSize: 12, color: 'var(--ss-ink3)', marginTop: 6 }}>
               Your profile must be set to <strong>Public</strong> in Steam privacy settings
             </p>
           </div>
@@ -104,10 +104,10 @@ export default function SetupScreen() {
           {error && (
             <div style={{
               padding: '12px 16px',
-              background: 'var(--accent-rose-dim)',
-              border: '1px solid var(--accent-rose)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--accent-rose)',
+              background: 'var(--ss-btn)',
+              border: '1px solid var(--ss-cat-5)',
+              borderRadius: '14px',
+              color: 'var(--ss-cat-5)',
               fontSize: 13,
               marginBottom: 20,
             }}>
@@ -134,7 +134,7 @@ export default function SetupScreen() {
 
         {/* Privacy note */}
         <div style={{ textAlign: 'center', marginTop: 24 }}>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+          <p style={{ fontSize: 12, color: 'var(--ss-ink3)', lineHeight: 1.6 }}>
             🔒 Your API key is stored only in your browser's local storage.<br />
             All data is fetched directly from Steam's servers.
           </p>

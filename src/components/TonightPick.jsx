@@ -28,6 +28,7 @@ export default function TonightPick() {
   const [rollId, setRollId] = useState(0);
   const [justLanded, setJustLanded] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
+  const [detailRect, setDetailRect] = useState(null);
   const spinRef = useRef(null);
   const pollRef = useRef(null);
   const landRef = useRef(null);
@@ -120,9 +121,10 @@ export default function TonightPick() {
     return () => { cancelled = true; if (pollRef.current) clearInterval(pollRef.current); };
   }, [pick?.appid]);
 
-  const openDetail = () => {
+  const openDetail = (e) => {
     if (spinning || !pick) return;
     setShowDetail(true);
+    setDetailRect(e ? e.currentTarget.getBoundingClientRect() : null);
     getHltbForGame(pick.name);
     getAchievementsForGames([pick.appid]);
   };
@@ -285,6 +287,7 @@ export default function TonightPick() {
           game={pick}
           achData={achCache[pick.appid]}
           hltbData={hltbCache[pick.name]}
+          anchorRect={detailRect}
           onClose={() => setShowDetail(false)}
         />
       )}

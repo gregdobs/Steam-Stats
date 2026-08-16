@@ -44,6 +44,10 @@ function MonthlyUnlocksChart({ months, appidToHeader }) {
   const areaPath = pts.length ? `${linePath} L ${pts[pts.length - 1].x.toFixed(1)} ${Y1} L ${pts[0].x.toFixed(1)} ${Y1} Z` : '';
   const avg = Math.round(shown.reduce((s, m) => s + m.count, 0) / Math.max(shown.length, 1));
   const gridLines = [0, 0.25, 0.5, 0.75, 1].map(f => ({ y: Y1 - f * (Y1 - Y0), label: Math.round(max * f) }));
+  // Cap labels to roughly one per 55px of chart width so long ranges (e.g.
+  // "All months" across a decade-plus) don't overlap each other.
+  const maxLabels = Math.max(1, Math.floor((X1 - X0) / 55));
+  const labelStep = Math.max(1, Math.ceil(shown.length / maxLabels));
 
   const sel = selected ? shown.find(m => m.month === selected) : null;
 
@@ -76,12 +80,14 @@ function MonthlyUnlocksChart({ months, appidToHeader }) {
             stroke="var(--ss-bg)" strokeWidth={2}
             style={{ cursor: 'pointer', transition: 'r 0.15s' }}
             onClick={() => setSelected(prev => prev === p.m.month ? null : p.m.month)}
-          />
+          >
+            <title>{`${monthLabel(p.m.month)} — ${p.m.count} unlocked`}</title>
+          </circle>
         ))}
         {pts.map((p, i) => (
-          shown.length > 14 && i % 2 === 1 ? null : (
+          i % labelStep === 0 || i === pts.length - 1 ? (
             <text key={i} x={p.x} y={234} textAnchor="middle" fill="var(--ss-ink4)" fontSize={10}>{monthLabel(p.m.month)}</text>
-          )
+          ) : null
         ))}
       </svg>
 
@@ -173,7 +179,7 @@ function RecencyTouch({ ownedGames, appidToHeader }) {
 }
 
 // ── Your Steam years ────────────────────────────────────────────────────
-const SEGMENT_COLORS = ['var(--ss-cat-1)', 'var(--ss-cat-2)', 'var(--ss-cat-3)', 'rgba(255,255,255,.22)'];
+const SEGMENT_COLORS = ['var(--ss-cat-1)', 'var(--ss-cat-2)', 'var(--ss-cat-3)', 'var(--ss-cat-4)', 'var(--ss-cat-5)', 'rgba(255,255,255,.22)'];
 
 function SteamYears({ years }) {
   const [isolated, setIsolated] = useState(null);

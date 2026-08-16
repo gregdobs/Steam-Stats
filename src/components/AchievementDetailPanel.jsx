@@ -4,16 +4,16 @@ import DetailSheet from './DetailSheet.jsx';
 // Per-achievement detail — hero icon, description, how rare it is among
 // everyone who owns the game, and the user's overall completion in that
 // game. Renders inside the shared DetailSheet slide-in shell.
-export default function AchievementDetailPanel({ achievement, achData, onClose }) {
+export default function AchievementDetailPanel({ achievement, achData, anchorRect, onClose }) {
   if (!achievement) return null;
 
   const oneIn = achievement.percent > 0 ? Math.round(100 / achievement.percent) : null;
   const gamePct = achData?.pct ?? null;
 
   return (
-    <DetailSheet open={!!achievement} onClose={onClose}>
+    <DetailSheet open={!!achievement} onClose={onClose} anchorRect={anchorRect}>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <div style={{ height: 180, background: 'var(--ss-inset)', position: 'relative', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ height: 150, background: 'var(--ss-inset)', position: 'relative', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {achievement.icon ? (
             <img src={achievement.icon} alt="" width={96} height={96} style={{ borderRadius: 16 }} onError={e => { e.currentTarget.style.display = 'none'; }} />
           ) : (

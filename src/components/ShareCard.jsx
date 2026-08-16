@@ -338,29 +338,29 @@ export default function ShareCard({ onClose }) {
     >
       <div style={{
         width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto',
-        background: 'var(--bg-secondary)', borderRadius: 'var(--radius-xl)',
-        border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-xl)',
+        background: 'var(--ss-sheet)', borderRadius: '26px',
+        border: '1px solid var(--ss-line)', boxShadow: 'var(--ss-shadow)',
         padding: 24,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--ss-ink)' }}>
             Share Card
           </h2>
-          <button onClick={onClose} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', width: 30, height: 30, cursor: 'pointer', color: 'var(--text-secondary)' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'var(--ss-inset)', border: '1px solid var(--ss-line)', borderRadius: '14px', width: 30, height: 30, cursor: 'pointer', color: 'var(--ss-ink2)' }}>✕</button>
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           {PERIODS.map(p => (
             <button key={p.id} onClick={() => { setPeriod(p.id); setPngUrl(null); }} className="btn btn-ghost" style={{
               fontSize: 12, flex: 1,
-              background: period === p.id ? 'var(--accent-blue-dim)' : undefined,
-              color: period === p.id ? 'var(--accent-blue)' : undefined,
-              borderColor: period === p.id ? 'var(--accent-blue)' : undefined,
+              background: period === p.id ? 'var(--ss-pill-bg)' : undefined,
+              color: period === p.id ? 'var(--ss-accent)' : undefined,
+              borderColor: period === p.id ? 'var(--ss-accent)' : undefined,
             }}>{p.label}</button>
           ))}
         </div>
 
-        <canvas ref={canvasRef} style={{ display: pngUrl ? 'block' : 'none', width: '100%', borderRadius: 'var(--radius-lg)', marginBottom: 16 }} />
+        <canvas ref={canvasRef} style={{ display: pngUrl ? 'block' : 'none', width: '100%', borderRadius: '20px', marginBottom: 16 }} />
 
         {!pngUrl && (
           <div style={{ padding: '60px 0', textAlign: 'center' }}>
