@@ -25,6 +25,21 @@ const MAX_LIT = 0.28;
 const FAST = '16ms linear';
 const SETTLE = '.4s cubic-bezier(.16,1,.3,1)';
 
+// A fixed rotation angle swings a card's far edge through more pixels the
+// bigger that edge is (displacement = angle * half-the-edge, so it scales
+// linearly with size) — the same MAX_DEG reads as a subtle tilt on a small
+// stat tile but a visible swing on a large panel. Each rotation axis is
+// scaled by the reciprocal of the dimension it swings (rotateX, driven by
+// vertical cursor position, swings the top/bottom edges — scale it by
+// height; rotateY swings the left/right edges — scale it by width). That
+// cancels the size term exactly: edge displacement comes out to the same
+// constant for every card at or above REF_SIZE, not just closer to it, so
+// there's no floor to fall back to — the 1/dimension term never needs one.
+// Cards smaller than REF_SIZE keep the full MAX_DEG (uncapped upward) and
+// simply swing less in absolute pixels, which reads fine since they're
+// already visually small.
+const REF_SIZE = 288;
+
 function eligible(el) {
   return el && !el.closest('[data-no-tilt]') && !el.hasAttribute('data-tilt-flat');
 }
@@ -33,9 +48,14 @@ function apply(el, rect, clientX, clientY) {
   if (rect.width === 0 || rect.height === 0) return;
   const px = (clientX - rect.left) / rect.width;
   const py = (clientY - rect.top) / rect.height;
-  const rxDeg = (0.5 - py) * MAX_DEG * 2;
-  const ryDeg = (px - 0.5) * MAX_DEG * 2;
-  const magnitude = Math.min(1, (Math.abs(rxDeg) + Math.abs(ryDeg)) / (MAX_DEG * 2));
+  const rowDeg = MAX_DEG * Math.min(1, REF_SIZE / rect.height);
+  const colDeg = MAX_DEG * Math.min(1, REF_SIZE / rect.width);
+  const rxDeg = (0.5 - py) * rowDeg * 2;
+  const ryDeg = (px - 0.5) * colDeg * 2;
+  // Magnitude (and thus sheen brightness) tracks cursor position within the
+  // card, not the scaled-down angle, so the sheen response itself stays
+  // consistent across card sizes even though the rotation doesn't.
+  const magnitude = Math.min(1, Math.abs(0.5 - py) * 2 + Math.abs(px - 0.5) * 2);
   el.style.setProperty('--ss-tilt-t', FAST);
   el.style.setProperty('--ss-tilt-rx', `${rxDeg.toFixed(2)}deg`);
   el.style.setProperty('--ss-tilt-ry', `${ryDeg.toFixed(2)}deg`);
