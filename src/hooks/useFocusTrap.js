@@ -7,6 +7,14 @@ const FOCUSABLE = 'a[href],button:not([disabled]),textarea:not([disabled]),input
 // behind the overlay. Moves focus in on open, cycles Tab/Shift+Tab at the
 // panel's edges, and restores focus to whatever was focused before the
 // panel opened.
+//
+// Both focus() calls pass preventScroll: true — anchor-positioned panels
+// like DetailSheet already clamp their own position to stay inside the
+// current viewport, so the browser's default focus-scroll-into-view is
+// redundant at best. At worst it yanks the page back to wherever the
+// pre-open focus target sits (e.g. a nav button up top), which is exactly
+// what happened here: opening/closing a game's detail popover from deep in
+// a long list was scrolling the whole page back to the top.
 export default function useFocusTrap(active, containerRef) {
   useEffect(() => {
     if (!active || !containerRef.current) return;
@@ -15,7 +23,7 @@ export default function useFocusTrap(active, containerRef) {
 
     const focusables = () => Array.from(container.querySelectorAll(FOCUSABLE));
     const first = focusables()[0];
-    (first || container).focus();
+    (first || container).focus({ preventScroll: true });
 
     const onKeyDown = (e) => {
       if (e.key !== 'Tab') return;
@@ -35,7 +43,7 @@ export default function useFocusTrap(active, containerRef) {
     container.addEventListener('keydown', onKeyDown);
     return () => {
       container.removeEventListener('keydown', onKeyDown);
-      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
+      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus({ preventScroll: true });
     };
   }, [active, containerRef]);
 }
