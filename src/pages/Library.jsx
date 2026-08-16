@@ -5,8 +5,7 @@ import { GameHeader, GameCapsule } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
 import GenreAllocation from '../components/GenreAllocation.jsx';
 import GameHoverCard from '../components/GameHoverCard.jsx';
-import Tooltip from '../components/Tooltip.jsx';
-import { chartRgba, rampColor, PageHeader, SectionHeading, CrossFilterBanner } from '../components/designSystem.jsx';
+import { chartRgba, rampColor, PageHeader, SectionHeading, CrossFilterBanner, FilterPill } from '../components/designSystem.jsx';
 
 // ── Colour tokens ──────────────────────────────────────────────────────────
 // Same cool-to-warm ramp Progress uses for its status spectrum — playtime
@@ -42,8 +41,13 @@ function platformLabel(game) {
 }
 
 // ── Interactive SVG Donut ──────────────────────────────────────────────────
+// Hover previews the click: it dims every other segment/label and swaps the
+// center readout to the hovered bucket, exactly like selecting it would —
+// without committing the filter. A plain cursor-tooltip can't show "here's
+// what the rest of the page would look like," so the highlight *is* the
+// hover UI now instead of a floating popup.
 function DistributionDonut({ games, activeFilter, onFilter }) {
-  const [hover, setHover] = useState(null); // { key, rect } — drives both the hover scale effect and the tooltip
+  const [hover, setHover] = useState(null); // bucket key, or null
   const SIZE = 220, CX = 110, CY = 110, R_OUT = 90, R_IN = 56, GAP = 0.022;
 
   const counts = {};
@@ -61,7 +65,7 @@ function DistributionDonut({ games, activeFilter, onFilter }) {
     cursor += fraction * 2 * Math.PI;
 
     const isSel = activeFilter?.type === 'bucket' && activeFilter.value === b.key;
-    const isHov = hover?.key === b.key;
+    const isHov = hover === b.key;
     const r = isSel ? R_OUT + 8 : isHov ? R_OUT + 4 : R_OUT;
     const ri = isSel ? R_IN - 4 : R_IN;
 
@@ -77,36 +81,40 @@ function DistributionDonut({ games, activeFilter, onFilter }) {
     return { ...b, count, fraction, pts, isSel, isHov };
   }).filter(a => a.pts);
 
-  const centerCount = activeFilter?.type === 'bucket' ? counts[activeFilter.value] : total;
-  const centerLabel = activeFilter?.type === 'bucket' ? activeFilter.value : 'total games';
+  // Hovering previews the bucket the same way clicking would select it;
+  // falls back to the committed filter, then the plain total.
+  const previewKey = hover ?? (activeFilter?.type === 'bucket' ? activeFilter.value : null);
+  const centerCount = previewKey ? counts[previewKey] : total;
+  const centerLabel = previewKey ?? 'total games';
 
-  const hoveredBucket = hover ? BUCKET_META.find(b => b.key === hover.key) : null;
-  const hoveredCount = hoveredBucket ? counts[hoveredBucket.key] : 0;
-  const hoveredPct = total > 0 ? Math.round((hoveredCount / total) * 100) : 0;
-  const tooltipText = hoveredBucket
-    ? `${hoveredBucket.key}: ${hoveredCount} game${hoveredCount === 1 ? '' : 's'} (${hoveredPct}%) — click to filter`
-    : null;
+  const clickFilter = key => {
+    const b = BUCKET_META.find(bb => bb.key === key);
+    onFilter(key === activeFilter?.value && activeFilter?.type === 'bucket' ? null : { type: 'bucket', value: key, label: key, color: b.color });
+  };
 
   return (
     <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
       <div style={{ position: 'relative', flexShrink: 0 }}>
         <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE} height={SIZE} style={{ overflow: 'visible' }}>
-          {arcs.map(arc => (
-            <path
-              key={arc.key}
-              d={arc.pts}
-              fill={arc.color}
-              opacity={activeFilter?.type === 'bucket' && !arc.isSel ? 0.35 : 1}
-              style={{ cursor: 'pointer', transition: 'opacity 0.2s' }}
-              onClick={() => onFilter(arc.isSel ? null : { type: 'bucket', value: arc.key, label: arc.key, color: arc.color })}
-              onMouseEnter={e => setHover({ key: arc.key, rect: e.currentTarget.getBoundingClientRect() })}
-              onMouseLeave={() => setHover(null)}
-              role="button"
-              aria-label={`${arc.key}: ${arc.count} games`}
-              tabIndex={0}
-              onKeyDown={e => e.key === 'Enter' && onFilter(arc.isSel ? null : { type: 'bucket', value: arc.key, label: arc.key, color: arc.color })}
-            />
-          ))}
+          {arcs.map(arc => {
+            const dimmed = activeFilter?.type === 'bucket' ? !arc.isSel : (hover !== null && !arc.isHov);
+            return (
+              <path
+                key={arc.key}
+                d={arc.pts}
+                fill={arc.color}
+                opacity={dimmed ? 0.35 : 1}
+                style={{ cursor: 'pointer', transition: 'opacity 0.2s' }}
+                onClick={() => clickFilter(arc.key)}
+                onMouseEnter={() => setHover(arc.key)}
+                onMouseLeave={() => setHover(null)}
+                role="button"
+                aria-label={`${arc.key}: ${arc.count} games — click to filter`}
+                tabIndex={0}
+                onKeyDown={e => e.key === 'Enter' && clickFilter(arc.key)}
+              />
+            );
+          })}
           <circle cx={CX} cy={CY} r={R_IN - 4} fill="var(--ss-inset)" />
           <text x={CX} y={CY - 8} textAnchor="middle" dominantBaseline="central" fill="var(--ss-ink)" fontSize={22} fontWeight={600}>
             {centerCount}
@@ -115,23 +123,25 @@ function DistributionDonut({ games, activeFilter, onFilter }) {
             {centerLabel}
           </text>
         </svg>
-        <Tooltip text={tooltipText} anchorRect={hover?.rect} />
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 160 }}>
         {BUCKET_META.map(b => {
           const count = counts[b.key];
           const isSel = activeFilter?.type === 'bucket' && activeFilter.value === b.key;
+          const isHov = hover === b.key;
+          const dimmed = activeFilter?.type === 'bucket' ? !isSel : (hover !== null && !isHov);
           return (
-            <button key={b.key} onClick={() => onFilter(isSel ? null : { type: 'bucket', value: b.key, label: b.key, color: b.color })}
-              onMouseEnter={e => setHover({ key: b.key, rect: e.currentTarget.getBoundingClientRect() })}
+            <button key={b.key} onClick={() => clickFilter(b.key)}
+              onMouseEnter={() => setHover(b.key)}
               onMouseLeave={() => setHover(null)}
               className="ss-pill"
               style={{
                 justifyContent: 'flex-start', width: '100%',
-                background: isSel ? 'var(--ss-pill-bg)' : 'transparent',
-                borderColor: isSel ? 'var(--ss-pill-line)' : 'transparent',
-                opacity: activeFilter?.type === 'bucket' && !isSel ? 0.5 : 1,
+                background: isSel ? 'var(--ss-pill-bg)' : isHov ? 'var(--ss-btn)' : 'transparent',
+                borderColor: isSel ? 'var(--ss-pill-line)' : isHov ? 'var(--ss-line)' : 'transparent',
+                opacity: dimmed ? 0.5 : 1,
+                transition: 'opacity 0.15s, background 0.15s, border-color 0.15s',
               }}
             >
               <div style={{ width: 9, height: 9, borderRadius: 2, background: b.color, flexShrink: 0 }} />
@@ -426,6 +436,14 @@ export default function Library() {
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--ss-ink)' }}>
               {activeFilter ? `Filtered games (${filteredGames.length})` : 'All played games'}
             </h3>
+            {activeFilter && (
+              <FilterPill
+                label={activeFilter.label}
+                active
+                onClick={() => setActiveFilter(null)}
+                onClear={() => setActiveFilter(null)}
+              />
+            )}
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             {[['hours', 'By Lifetime'], ['2weeks', 'By 2 Weeks'], ['name', 'A–Z']].map(([key, label]) => (
