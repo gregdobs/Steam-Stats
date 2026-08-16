@@ -88,7 +88,9 @@ export default function Achievements() {
   const [filter, setFilter]       = useState('all');
   const [sortBy, setSortBy]       = useState('pct');
   const [selectedGame, setSelectedGame] = useState(null);
+  const [selectedGameRect, setSelectedGameRect] = useState(null);
   const [selectedAchievement, setSelectedAchievement] = useState(null);
+  const [selectedAchievementRect, setSelectedAchievementRect] = useState(null);
 
   const playedGames = ownedGames
     .filter(g => g.playtime_forever > 0)
@@ -107,8 +109,14 @@ export default function Achievements() {
 
   const achData = achCache;
 
-  const handleSelect = useCallback((game) => {
+  const handleSelect = useCallback((game, e) => {
     setSelectedGame(prev => prev?.appid === game.appid ? null : game);
+    setSelectedGameRect(e ? e.currentTarget.getBoundingClientRect() : null);
+  }, []);
+
+  const handleSelectAchievement = useCallback((achievement, e) => {
+    setSelectedAchievement(achievement);
+    setSelectedAchievementRect(e ? e.currentTarget.getBoundingClientRect() : null);
   }, []);
 
   // Scoped to this page's games — see loadedCount comment above for why.
@@ -122,6 +130,7 @@ export default function Achievements() {
     let games = playedGames.filter(g => achData[g.appid] !== undefined);
     if (filter === 'perfect') games = games.filter(g => achData[g.appid]?.pct === 100);
     else if (filter === 'almost') games = games.filter(g => { const p = achData[g.appid]?.pct; return p !== null && p >= 75 && p < 100; });
+    else if (filter === 'progress') games = games.filter(g => { const p = achData[g.appid]?.pct; return p !== null && p > 0 && p < 75; });
     else if (filter === 'none') games = games.filter(g => achData[g.appid]?.total === 0);
     return games.sort((a, b) => {
       if (sortBy === 'pct')     return (achData[b.appid]?.pct ?? -1) - (achData[a.appid]?.pct ?? -1);
@@ -170,8 +179,8 @@ export default function Achievements() {
       {/* Summary stats */}
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
         {[
-          { label: 'Total Earned',  value: totalEarned.toLocaleString(), color: 'var(--ss-cat-4)' },
-          { label: 'Available',     value: totalAvail.toLocaleString(),  color: 'var(--ss-accent)' },
+          { label: 'Total Earned',  value: totalEarned.toLocaleString(), color: 'var(--ss-accent)' },
+          { label: 'Available',     value: totalAvail.toLocaleString(),  color: 'var(--ss-ink)' },
           { label: 'Perfect Games', value: perfect,                       color: 'var(--ss-cat-3)' },
           { label: 'Overall %',     value: totalAvail > 0 ? `${Math.round((totalEarned / totalAvail) * 100)}%` : '—', color: 'var(--ss-cat-2)' },
         ].map(s => (
@@ -182,12 +191,12 @@ export default function Achievements() {
         ))}
       </div>
 
-      <AchievementRarity games={playedGames} achCache={achData} onSelect={setSelectedAchievement} />
+      <AchievementRarity games={playedGames} achCache={achData} onSelect={handleSelectAchievement} />
 
       {/* Filters + sort */}
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {[['all','🎮 All'],['perfect','💎 Perfect'],['almost','🔥 Almost'],['none','⬜ No Achievements']].map(([id,label]) => (
+          {[['all','🎮 All'],['perfect','💎 Perfect'],['almost','🔥 Almost'],['progress','📊 In Progress'],['none','⬜ No Achievements']].map(([id,label]) => (
             <button key={id} onClick={() => setFilter(id)} className={`ss-pill${filter === id ? ' active' : ''}`}>{label}</button>
           ))}
         </div>
@@ -204,7 +213,7 @@ export default function Achievements() {
           <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--ss-ink3)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 12 }}>
             Closest to complete
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }}>
             {spotlightGames.map(game => (
               <AchievementCard
                 key={game.appid}
@@ -220,7 +229,7 @@ export default function Achievements() {
       )}
 
       {/* Compact list rows for the rest */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
         {restGames.map(game => (
           <AchievementCard
             key={game.appid}
@@ -242,6 +251,7 @@ export default function Achievements() {
         <GameDetailPanel
           game={selectedGame}
           achData={achData[selectedGame.appid]}
+          anchorRect={selectedGameRect}
           onClose={() => setSelectedGame(null)}
         />
       )}
@@ -250,6 +260,7 @@ export default function Achievements() {
         <AchievementDetailPanel
           achievement={selectedAchievement}
           achData={achData[selectedAchievement.appid]}
+          anchorRect={selectedAchievementRect}
           onClose={() => setSelectedAchievement(null)}
         />
       )}

@@ -14,7 +14,7 @@ const STATUS_COLOR = {
 
 // game detail — renders inside a slide-in DetailSheet, or inline (no sheet
 // chrome) when embedded directly in another surface, e.g. Settings' games list.
-export default function GameDetailPanel({ game, onClose, achData, hltbData, inline }) {
+export default function GameDetailPanel({ game, onClose, achData, hltbData, anchorRect, inline }) {
   const { ownedGames, recentGames } = useApp();
   const [rarity, setRarity] = useState(null);
 
@@ -61,7 +61,7 @@ export default function GameDetailPanel({ game, onClose, achData, hltbData, inli
   const content = (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Header image */}
-      <div style={{ height: 180, background: 'var(--ss-inset)', position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+      <div style={{ height: 150, background: 'var(--ss-inset)', position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
         <GameHeader appId={game.appid} name={game.name} />
         <div style={{ position: 'absolute', inset: 0, background: 'var(--ss-scrim)' }} />
         {!inline && (
@@ -234,7 +234,7 @@ export default function GameDetailPanel({ game, onClose, achData, hltbData, inli
   }
 
   return (
-    <DetailSheet open={!!game} onClose={onClose}>
+    <DetailSheet open={!!game} onClose={onClose} anchorRect={anchorRect}>
       {content}
     </DetailSheet>
   );

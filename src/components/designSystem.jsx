@@ -11,15 +11,6 @@ export function chartRgba(alpha) {
   return `rgba(var(--ss-chart-rgb), ${alpha})`;
 }
 
-// Legacy warm-palette helpers — still imported by pages not yet migrated to
-// the glass redesign (Dashboard/Library/History). Deleted once those pages'
-// own phases land; new code should use chartRgba/tint above instead.
-export const ACCENT_HEX = '#b4623c';
-export function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
 export function tint(i, n) {
   const alpha = 1 - (i / Math.max(n - 1, 1)) * 0.78;
   return chartRgba(alpha.toFixed(3));

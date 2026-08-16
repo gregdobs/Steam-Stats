@@ -16,7 +16,7 @@ function ToggleSwitch({ on, onChange }) {
       style={{
         width: 40, height: 22, borderRadius: 99, padding: 2,
         border: 'none', cursor: 'pointer', transition: 'background 0.2s',
-        background: on ? 'var(--accent-blue)' : 'var(--border-strong)',
+        background: on ? 'var(--ss-accent)' : 'var(--ss-hi)',
         position: 'relative', flexShrink: 0,
       }}
     >
@@ -44,10 +44,10 @@ const SECTIONS = [
 function Section({ title, children }) {
   return (
     <div style={{ marginBottom: 28 }}>
-      <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
+      <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: 'var(--ss-ink3)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
         {title}
       </h3>
-      <div style={{ background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+      <div style={{ background: 'var(--ss-inset)', borderRadius: '20px', border: '1px solid var(--ss-line-soft)', overflow: 'hidden' }}>
         {children}
       </div>
     </div>
@@ -61,16 +61,16 @@ function Row({ label, description, children, last, onClick }) {
       style={{
         display: 'flex', alignItems: 'flex-start', gap: 16,
         padding: '16px 20px',
-        borderBottom: last ? 'none' : '1px solid var(--border-subtle)',
+        borderBottom: last ? 'none' : '1px solid var(--ss-line-soft)',
         cursor: onClick ? 'pointer' : undefined,
         transition: onClick ? 'background 0.12s' : undefined,
       }}
-      onMouseEnter={e => { if (onClick) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+      onMouseEnter={e => { if (onClick) e.currentTarget.style.background = 'var(--ss-btn-hi)'; }}
       onMouseLeave={e => { if (onClick) e.currentTarget.style.background = ''; }}
     >
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', marginBottom: description ? 3 : 0 }}>{label}</div>
-        {description && <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{description}</div>}
+        <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--ss-ink)', marginBottom: description ? 3 : 0 }}>{label}</div>
+        {description && <div style={{ fontSize: 12, color: 'var(--ss-ink3)', lineHeight: 1.5 }}>{description}</div>}
       </div>
       <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
         {children}
@@ -80,7 +80,7 @@ function Row({ label, description, children, last, onClick }) {
 }
 
 function StatusDot({ ok, warn, label }) {
-  const color = ok ? 'var(--accent-emerald)' : warn ? 'var(--accent-amber)' : 'var(--accent-rose)';
+  const color = ok ? 'var(--ss-cat-3)' : warn ? 'var(--ss-cat-4)' : 'var(--ss-cat-5)';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: `0 0 6px ${color}` }} />
@@ -111,14 +111,14 @@ function SubModal({ title, onClose, children }) {
     >
       <div style={{
         width: '100%', maxWidth: 760, maxHeight: '85vh',
-        background: 'var(--bg-secondary)', borderRadius: 'var(--radius-xl)',
-        border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-xl)',
+        background: 'var(--ss-sheet)', borderRadius: '26px',
+        border: '1px solid var(--ss-line)', boxShadow: 'var(--ss-shadow)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         animation: 'fadeIn 0.2s ease',
       }}>
-        <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{title}</h3>
-          <button onClick={onClose} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', width: 30, height: 30, cursor: 'pointer', fontSize: 14, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+        <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--ss-line-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--ss-ink)' }}>{title}</h3>
+          <button onClick={onClose} style={{ background: 'var(--ss-inset)', border: '1px solid var(--ss-line)', borderRadius: '14px', width: 30, height: 30, cursor: 'pointer', fontSize: 14, color: 'var(--ss-ink2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
         </div>
         <div style={{ overflowY: 'auto', flex: 1 }}>{children}</div>
       </div>
@@ -156,7 +156,7 @@ function GamesModal({ userData, ownedGames, onClose }) {
 
   return (
     <SubModal title={`Local Game Data — ${localGames.length} games`} onClose={onClose}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--ss-line-soft)', flexShrink: 0 }}>
         <input
           className="input"
           type="text"
@@ -175,32 +175,32 @@ function GamesModal({ userData, ownedGames, onClose }) {
                 key={game.appid}
                 onClick={() => setSelectedGame(prev => prev?.appid === game.appid ? null : game)}
                 style={{
-                  background: selectedGame?.appid === game.appid ? 'var(--accent-blue-dim)' : 'var(--bg-tertiary)',
-                  border: selectedGame?.appid === game.appid ? '1px solid var(--accent-blue)' : '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)', overflow: 'hidden',
+                  background: selectedGame?.appid === game.appid ? 'var(--ss-pill-bg)' : 'var(--ss-inset)',
+                  border: selectedGame?.appid === game.appid ? '1px solid var(--ss-accent)' : '1px solid var(--ss-line-soft)',
+                  borderRadius: '14px', overflow: 'hidden',
                   cursor: 'pointer', textAlign: 'left', padding: 0,
                   transition: 'all 0.15s',
                 }}
-                onMouseEnter={e => { if (selectedGame?.appid !== game.appid) e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
-                onMouseLeave={e => { if (selectedGame?.appid !== game.appid) e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
+                onMouseEnter={e => { if (selectedGame?.appid !== game.appid) e.currentTarget.style.borderColor = 'var(--ss-hi)'; }}
+                onMouseLeave={e => { if (selectedGame?.appid !== game.appid) e.currentTarget.style.borderColor = 'var(--ss-line-soft)'; }}
               >
-                <div style={{ height: 52, background: 'var(--bg-elevated)', overflow: 'hidden' }}>
+                <div style={{ height: 52, background: 'var(--ss-btn-hi)', overflow: 'hidden' }}>
                   <GameHeader appId={game.appid} name={game.name} />
                 </div>
                 <div style={{ padding: '8px 10px' }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ss-ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 4 }}>
                     {game.name}
                   </div>
                   <div style={{ display: 'flex', gap: 10, fontSize: 11 }}>
-                    <span style={{ color: 'var(--accent-blue)', fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+                    <span style={{ color: 'var(--ss-accent)', fontFamily: 'var(--font-display)', fontWeight: 700 }}>
                       {formatHours(game.playtime_forever)}
                     </span>
                     {game.launchCount && (
-                      <span style={{ color: 'var(--text-muted)' }}>{game.launchCount}× launched</span>
+                      <span style={{ color: 'var(--ss-ink3)' }}>{game.launchCount}× launched</span>
                     )}
                   </div>
                   {game.localLastPlayed && (
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                    <div style={{ fontSize: 10, color: 'var(--ss-ink3)', marginTop: 2 }}>
                       {formatLastPlayed(game.localLastPlayed)}
                     </div>
                   )}
@@ -208,7 +208,7 @@ function GamesModal({ userData, ownedGames, onClose }) {
               </button>
             ))}
             {filtered.length === 0 && (
-              <div style={{ gridColumn: '1/-1', padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              <div style={{ gridColumn: '1/-1', padding: 40, textAlign: 'center', color: 'var(--ss-ink3)', fontSize: 13 }}>
                 No games found
               </div>
             )}
@@ -217,7 +217,7 @@ function GamesModal({ userData, ownedGames, onClose }) {
 
         {/* Detail panel */}
         {selectedGame && (
-          <div style={{ borderLeft: '1px solid var(--border-subtle)', overflowY: 'auto' }}>
+          <div style={{ borderLeft: '1px solid var(--ss-line-soft)', overflowY: 'auto' }}>
             <GameDetailPanel
               game={selectedGame}
               onClose={() => setSelectedGame(null)}
@@ -251,13 +251,13 @@ function UsersModal({ localConfig, ownedGames, onClose }) {
                 onClick={() => setSelectedUser(isSel ? null : user)}
                 style={{
                   width: '100%', textAlign: 'left',
-                  background: isSel ? 'var(--accent-blue-dim)' : 'var(--bg-tertiary)',
-                  border: isSel ? '1px solid var(--accent-blue)' : '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-lg)', padding: '16px 20px',
+                  background: isSel ? 'var(--ss-pill-bg)' : 'var(--ss-inset)',
+                  border: isSel ? '1px solid var(--ss-accent)' : '1px solid var(--ss-line-soft)',
+                  borderRadius: '20px', padding: '16px 20px',
                   cursor: 'pointer', transition: 'all 0.15s',
                 }}
-                onMouseEnter={e => { if (!isSel) e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
-                onMouseLeave={e => { if (!isSel) e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
+                onMouseEnter={e => { if (!isSel) e.currentTarget.style.borderColor = 'var(--ss-hi)'; }}
+                onMouseLeave={e => { if (!isSel) e.currentTarget.style.borderColor = 'var(--ss-line-soft)'; }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -271,27 +271,27 @@ function UsersModal({ localConfig, ownedGames, onClose }) {
                       {user.userId.slice(-2)}
                     </div>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ss-ink)', fontFamily: 'var(--font-display)' }}>
                         User ID: {user.userId}
                       </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      <div style={{ fontSize: 12, color: 'var(--ss-ink3)' }}>
                         Local Steam account
                       </div>
                     </div>
                   </div>
-                  <span style={{ fontSize: 12, color: isSel ? 'var(--accent-blue)' : 'var(--text-muted)' }}>
+                  <span style={{ fontSize: 12, color: isSel ? 'var(--ss-accent)' : 'var(--ss-ink3)' }}>
                     {isSel ? '▲ Collapse' : '▼ Expand'}
                   </span>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                   {[
-                    { label: 'Games tracked', value: gameCount.toLocaleString(), color: 'var(--accent-blue)' },
-                    { label: 'With launches', value: withLaunches.toLocaleString(), color: 'var(--accent-emerald)' },
-                    { label: 'Total launches', value: totalLaunches.toLocaleString(), color: 'var(--accent-amber)' },
+                    { label: 'Games tracked', value: gameCount.toLocaleString(), color: 'var(--ss-accent)' },
+                    { label: 'With launches', value: withLaunches.toLocaleString(), color: 'var(--ss-cat-3)' },
+                    { label: 'Total launches', value: totalLaunches.toLocaleString(), color: 'var(--ss-cat-4)' },
                   ].map(s => (
-                    <div key={s.label} style={{ padding: '8px 10px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)' }}>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 2 }}>{s.label}</div>
+                    <div key={s.label} style={{ padding: '8px 10px', background: 'var(--ss-sheet)', borderRadius: '14px' }}>
+                      <div style={{ fontSize: 10, color: 'var(--ss-ink3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 2 }}>{s.label}</div>
                       <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-display)', color: s.color }}>{s.value}</div>
                     </div>
                   ))}
@@ -300,8 +300,8 @@ function UsersModal({ localConfig, ownedGames, onClose }) {
 
               {/* Expanded: top games by launch count */}
               {isSel && (
-                <div style={{ marginTop: 8, padding: '14px 16px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', animation: 'fadeIn 0.2s ease' }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 12 }}>
+                <div style={{ marginTop: 8, padding: '14px 16px', background: 'var(--ss-inset)', borderRadius: '20px', border: '1px solid var(--ss-line-soft)', animation: 'fadeIn 0.2s ease' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ss-ink3)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 12 }}>
                     Top games by launch count
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -315,21 +315,21 @@ function UsersModal({ localConfig, ownedGames, onClose }) {
                         const maxLaunches = Math.max(...Object.values(user.gamesData).map(g => g.launchCount || 0));
                         return (
                           <div key={appId} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{ width: 36, height: 20, borderRadius: 3, overflow: 'hidden', flexShrink: 0, background: 'var(--bg-elevated)' }}>
+                            <div style={{ width: 36, height: 20, borderRadius: 3, overflow: 'hidden', flexShrink: 0, background: 'var(--ss-btn-hi)' }}>
                               {apiGame && <GameHeader appId={apiGame.appid} name={name} />}
                             </div>
-                            <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                            <div style={{ flex: 1, height: 6, background: 'var(--border-default)', borderRadius: 99, overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${(g.launchCount / maxLaunches) * 100}%`, background: 'var(--accent-blue)', borderRadius: 99 }} />
+                            <span style={{ fontSize: 12, color: 'var(--ss-ink2)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                            <div style={{ flex: 1, height: 6, background: 'var(--ss-line)', borderRadius: 99, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${(g.launchCount / maxLaunches) * 100}%`, background: 'var(--ss-accent)', borderRadius: 99 }} />
                             </div>
-                            <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--accent-blue)', width: 32, textAlign: 'right', flexShrink: 0 }}>{g.launchCount}×</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--ss-accent)', width: 32, textAlign: 'right', flexShrink: 0 }}>{g.launchCount}×</span>
                           </div>
                         );
                       })}
                   </div>
                   {user.tags && Object.keys(user.tags).length > 0 && (
-                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Custom tags found: {Object.keys(user.tags).length} games tagged</div>
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--ss-line-soft)' }}>
+                      <div style={{ fontSize: 11, color: 'var(--ss-ink3)', marginBottom: 6 }}>Custom tags found: {Object.keys(user.tags).length} games tagged</div>
                     </div>
                   )}
                 </div>
@@ -338,7 +338,7 @@ function UsersModal({ localConfig, ownedGames, onClose }) {
           );
         })}
         {users.length === 0 && (
-          <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--ss-ink3)', fontSize: 13 }}>
             No local Steam users found. Make sure Steam is installed and has been run at least once.
           </div>
         )}
@@ -376,9 +376,9 @@ function ConnectionSettings() {
           : <StatusDot label="Not connected" />}
       </Row>
       <div style={{ padding: '0 20px 16px' }}>
-        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 6 }}>API Key</label>
+        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ss-ink3)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 6 }}>API Key</label>
         <input className="input" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Your Steam API key" style={{ marginBottom: 10 }} />
-        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 6 }}>Profile URL or Steam ID</label>
+        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ss-ink3)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 6 }}>Profile URL or Steam ID</label>
         <input className="input" type="text" value={steamUrl} onChange={e => setSteamUrl(e.target.value)} placeholder="https://steamcommunity.com/profiles/..." style={{ marginBottom: 10 }} />
         <button className="btn btn-primary" onClick={handleSave} disabled={saving || !apiKey || !steamUrl} style={{ fontSize: 13 }}>
           {saving ? '⟳ Reconnecting...' : saved ? '✓ Saved & Reconnected' : 'Save & Reconnect'}
@@ -389,8 +389,8 @@ function ConnectionSettings() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <img src={profile.avatarmedium} alt="" style={{ width: 32, height: 32, borderRadius: '50%' }} />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{profile.personaname}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>SteamID: {config?.steamId}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ss-ink)' }}>{profile.personaname}</div>
+              <div style={{ fontSize: 11, color: 'var(--ss-ink3)' }}>SteamID: {config?.steamId}</div>
             </div>
           </div>
         </Row>
@@ -464,7 +464,7 @@ function LocalSteamSettings() {
         <Row label="Steam Path" description="Where Steam is installed on your PC.">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end', minWidth: 260 }}>
             {localConfig?.found && (
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+              <span style={{ fontSize: 11, color: 'var(--ss-ink3)', fontFamily: 'monospace' }}>
                 {localConfig.steamPath}
               </span>
             )}
@@ -482,7 +482,7 @@ function LocalSteamSettings() {
               </button>
             </div>
             {testResult && (
-              <div style={{ fontSize: 12, padding: '6px 10px', borderRadius: 'var(--radius-md)', background: testResult.valid ? 'var(--accent-emerald-dim)' : 'var(--accent-rose-dim)', color: testResult.valid ? 'var(--accent-emerald)' : 'var(--accent-rose)', maxWidth: 280, textAlign: 'right' }}>
+              <div style={{ fontSize: 12, padding: '6px 10px', borderRadius: '14px', background: testResult.valid ? 'var(--ss-btn)' : 'var(--ss-btn)', color: testResult.valid ? 'var(--ss-cat-3)' : 'var(--ss-cat-5)', maxWidth: 280, textAlign: 'right' }}>
                 {testResult.valid
                   ? '✅ Valid — click Apply to use this path'
                   : `❌ ${testResult.error || 'Not a valid Steam folder'}`}
@@ -494,7 +494,7 @@ function LocalSteamSettings() {
               </button>
             )}
             {localConfig?.found && (
-              <button className="btn btn-ghost" onClick={handleClearPath} style={{ fontSize: 11, padding: '3px 8px', color: 'var(--text-muted)' }}>
+              <button className="btn btn-ghost" onClick={handleClearPath} style={{ fontSize: 11, padding: '3px 8px', color: 'var(--ss-ink3)' }}>
                 Reset to auto-detect
               </button>
             )}
@@ -514,14 +514,14 @@ function LocalSteamSettings() {
                 className="btn btn-ghost"
                 style={{ fontSize: 12, padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 6 }}
               >
-                🎮 <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--accent-blue)' }}>{totalGames.toLocaleString()}</span> games
+                🎮 <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--ss-accent)' }}>{totalGames.toLocaleString()}</span> games
               </button>
               <button
                 onClick={e => { e.stopPropagation(); setShowUsers(true); }}
                 className="btn btn-ghost"
                 style={{ fontSize: 12, padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 6 }}
               >
-                👤 <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--accent-emerald)' }}>{userCount}</span> user{userCount !== 1 ? 's' : ''}
+                👤 <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--ss-cat-3)' }}>{userCount}</span> user{userCount !== 1 ? 's' : ''}
               </button>
             </div>
           </Row>
@@ -532,7 +532,7 @@ function LocalSteamSettings() {
           <Row label="Library Folders" description="Game library locations across all drives." last>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
               {localConfig.libraryPaths.map((p, i) => (
-                <span key={i} style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{p}</span>
+                <span key={i} style={{ fontSize: 11, color: 'var(--ss-ink3)', fontFamily: 'monospace' }}>{p}</span>
               ))}
             </div>
           </Row>
@@ -540,7 +540,7 @@ function LocalSteamSettings() {
 
         {!localConfig?.found && (
           <Row label="Not detected" last description="Enter your Steam path above and click Test, then Apply.">
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
+            <span style={{ fontSize: 12, color: 'var(--ss-ink3)' }}>—</span>
           </Row>
         )}
       </Section>
@@ -645,7 +645,7 @@ function HLTBSettings() {
     await fetchStatus();
   };
 
-  const modeColor = status?.mode === 'auto' ? 'var(--accent-emerald)' : status?.mode === 'manual' ? 'var(--accent-amber)' : 'var(--accent-rose)';
+  const modeColor = status?.mode === 'auto' ? 'var(--ss-cat-3)' : status?.mode === 'manual' ? 'var(--ss-cat-4)' : 'var(--ss-cat-5)';
   const modeLabel = status?.mode === 'auto' ? '✅ Auto (working)' : status?.mode === 'manual' ? '🔧 Manual override' : '❌ Not connected';
 
   return (
@@ -659,20 +659,20 @@ function HLTBSettings() {
             <span style={{ fontSize: 13, fontWeight: 600, color: modeColor }}>{modeLabel}</span>
           </div>
           {status?.timeUntilRefresh && (
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Refreshes in {status.timeUntilRefresh}</span>
+            <span style={{ fontSize: 11, color: 'var(--ss-ink3)' }}>Refreshes in {status.timeUntilRefresh}</span>
           )}
         </div>
       </Row>
 
       {status?.hpKey && (
         <Row label="Anti-bot key" description="Honeypot key captured from HLTB.">
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{status.hpKey}</span>
+          <span style={{ fontSize: 12, color: 'var(--ss-ink3)', fontFamily: 'monospace' }}>{status.hpKey}</span>
         </Row>
       )}
 
       <Row label="Cache" description="Cached game lookups — cleared on token refresh.">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{status?.cacheSize ?? '—'} games</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ss-ink)' }}>{status?.cacheSize ?? '—'} games</span>
           <button className="btn btn-ghost" onClick={clearCache} style={{ fontSize: 11, padding: '3px 8px' }}>Clear</button>
         </div>
       </Row>
@@ -692,37 +692,37 @@ function HLTBSettings() {
 
       {/* Test result */}
       {testResult && (
-        <div style={{ margin: '8px 20px 12px', padding: '10px 14px', borderRadius: 'var(--radius-md)', fontSize: 13, background: testResult.type === 'success' ? 'var(--accent-emerald-dim)' : testResult.type === 'warn' ? 'var(--accent-amber-dim)' : 'var(--accent-rose-dim)', color: testResult.type === 'success' ? 'var(--accent-emerald)' : testResult.type === 'warn' ? 'var(--accent-amber)' : 'var(--accent-rose)' }}>
+        <div style={{ margin: '8px 20px 12px', padding: '10px 14px', borderRadius: '14px', fontSize: 13, background: testResult.type === 'success' ? 'var(--ss-btn)' : testResult.type === 'warn' ? 'var(--ss-btn)' : 'var(--ss-btn)', color: testResult.type === 'success' ? 'var(--ss-cat-3)' : testResult.type === 'warn' ? 'var(--ss-cat-4)' : 'var(--ss-cat-5)' }}>
           {testResult.message}
         </div>
       )}
 
       {/* Last error */}
       {status?.lastError && (
-        <div style={{ margin: '0 20px 12px', padding: '10px 14px', borderRadius: 'var(--radius-md)', fontSize: 12, background: 'var(--accent-rose-dim)', color: 'var(--accent-rose)' }}>
+        <div style={{ margin: '0 20px 12px', padding: '10px 14px', borderRadius: '14px', fontSize: 12, background: 'var(--ss-btn)', color: 'var(--ss-cat-5)' }}>
           Last error: {status.lastError}
         </div>
       )}
 
       {/* Manual override toggle */}
-      <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '4px 0 0' }}>
+      <div style={{ borderTop: '1px solid var(--ss-line-soft)', margin: '4px 0 0' }}>
         <button
           onClick={() => setShowManual(v => !v)}
           style={{
             width: '100%', textAlign: 'left', padding: '14px 20px',
             background: 'none', border: 'none', cursor: 'pointer',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            color: 'var(--text-secondary)', fontSize: 13, fontFamily: 'var(--font-body)',
+            color: 'var(--ss-ink2)', fontSize: 13, fontFamily: 'var(--font-body)',
           }}
         >
-          <span>🔧 Manual token override {status?.mode === 'manual' && <span style={{ color: 'var(--accent-amber)', fontWeight: 600 }}>(active)</span>}</span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{showManual ? '▲ Hide' : '▼ Show'}</span>
+          <span>🔧 Manual token override {status?.mode === 'manual' && <span style={{ color: 'var(--ss-cat-4)', fontWeight: 600 }}>(active)</span>}</span>
+          <span style={{ fontSize: 11, color: 'var(--ss-ink3)' }}>{showManual ? '▲ Hide' : '▼ Show'}</span>
         </button>
 
         {showManual && (
           <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, padding: '8px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-              Use if auto-fetch fails. To find values: open <strong>howlongtobeat.com</strong> → F12 → Network → search any game → click the POST request to <code style={{ background: 'var(--bg-tertiary)', padding: '1px 4px', borderRadius: 3 }}>/api/bleed</code> → copy the <code style={{ background: 'var(--bg-tertiary)', padding: '1px 4px', borderRadius: 3 }}>x-auth-token</code>, <code style={{ background: 'var(--bg-tertiary)', padding: '1px 4px', borderRadius: 3 }}>x-hp-key</code>, and <code style={{ background: 'var(--bg-tertiary)', padding: '1px 4px', borderRadius: 3 }}>x-hp-val</code> headers.
+            <div style={{ fontSize: 12, color: 'var(--ss-ink3)', lineHeight: 1.6, padding: '8px 12px', background: 'var(--ss-btn-hi)', borderRadius: '14px', border: '1px solid var(--ss-line-soft)' }}>
+              Use if auto-fetch fails. To find values: open <strong>howlongtobeat.com</strong> → F12 → Network → search any game → click the POST request to <code style={{ background: 'var(--ss-inset)', padding: '1px 4px', borderRadius: 3 }}>/api/bleed</code> → copy the <code style={{ background: 'var(--ss-inset)', padding: '1px 4px', borderRadius: 3 }}>x-auth-token</code>, <code style={{ background: 'var(--ss-inset)', padding: '1px 4px', borderRadius: 3 }}>x-hp-key</code>, and <code style={{ background: 'var(--ss-inset)', padding: '1px 4px', borderRadius: 3 }}>x-hp-val</code> headers.
             </div>
 
             {[
@@ -732,7 +732,7 @@ function HLTBSettings() {
               ['hltb_alive cookie', manualCookie, setManualCookie, 'Optional'],
             ].map(([label, val, setter, placeholder]) => (
               <div key={label}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 4 }}>{label}</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--ss-ink3)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 4 }}>{label}</label>
                 <input className="input" type={label.includes('token') ? 'password' : 'text'} value={val} onChange={e => setter(e.target.value)} placeholder={placeholder} style={{ fontSize: 12 }} />
               </div>
             ))}
@@ -742,7 +742,7 @@ function HLTBSettings() {
                 {tokenSaved ? '✓ Saved' : 'Apply Manual Token'}
               </button>
               {status?.mode === 'manual' && (
-                <button className="btn btn-ghost" onClick={clearManualToken} style={{ fontSize: 13, color: 'var(--accent-rose)', borderColor: 'var(--accent-rose)' }}>
+                <button className="btn btn-ghost" onClick={clearManualToken} style={{ fontSize: 13, color: 'var(--ss-cat-5)', borderColor: 'var(--ss-cat-5)' }}>
                   Clear & Use Auto
                 </button>
               )}
@@ -778,32 +778,32 @@ function DisplaySettings() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
                   padding: '9px 11px', borderRadius: 14, cursor: 'pointer', transition: 'background 0.15s',
-                  background: on ? 'var(--accent-blue-dim)' : 'var(--bg-tertiary)',
-                  border: on ? '1px solid var(--accent-blue)' : '1px solid var(--border-subtle)',
+                  background: on ? 'var(--ss-pill-bg)' : 'var(--ss-inset)',
+                  border: on ? '1px solid var(--ss-accent)' : '1px solid var(--ss-line-soft)',
                 }}
-                onMouseEnter={e => { if (!on) e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
-                onMouseLeave={e => { if (!on) e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
+                onMouseEnter={e => { if (!on) e.currentTarget.style.borderColor = 'var(--ss-hi)'; }}
+                onMouseLeave={e => { if (!on) e.currentTarget.style.borderColor = 'var(--ss-line-soft)'; }}
               >
                 <span style={{ position: 'relative', flexShrink: 0, width: 34, height: 34, borderRadius: 11, overflow: 'hidden', background: t.swatchBg, border: '1px solid rgba(255,255,255,.14)' }}>
                   <span style={{ position: 'absolute', left: 5, right: 5, top: 7, height: 8, borderRadius: 4, background: 'rgba(255,255,255,.22)' }} />
                   <span style={{ position: 'absolute', left: 5, bottom: 6, width: 13, height: 6, borderRadius: 3, background: t.swatchAccent }} />
                 </span>
                 <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: on ? 'var(--accent-blue)' : 'var(--text-primary)' }}>{t.label}</span>
-                  <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.35 }}>{t.note}</span>
+                  <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: on ? 'var(--ss-accent)' : 'var(--ss-ink)' }}>{t.label}</span>
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--ss-ink3)', lineHeight: 1.35 }}>{t.note}</span>
                 </span>
-                {on && <span style={{ fontSize: 12, color: 'var(--accent-blue)', flexShrink: 0 }}>●</span>}
+                {on && <span style={{ fontSize: 12, color: 'var(--ss-accent)', flexShrink: 0 }}>●</span>}
               </button>
             );
           })}
         </div>
         <Row label="Glass blur" description="Intensity of the frosted-glass blur behind every panel." last>
-          <div style={{ display: 'flex', gap: 4, padding: 3, background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)' }}>
+          <div style={{ display: 'flex', gap: 4, padding: 3, background: 'var(--ss-sheet)', borderRadius: '14px', border: '1px solid var(--ss-line)' }}>
             {BLUR_STEPS.map(b => (
               <button key={b.id} onClick={() => setBlurIntensity(b.id)} style={{
-                background: blurIntensity === b.id ? 'var(--accent-blue)' : 'transparent',
-                color: blurIntensity === b.id ? 'white' : 'var(--text-muted)',
-                border: 'none', borderRadius: 'calc(var(--radius-md) - 2px)',
+                background: blurIntensity === b.id ? 'var(--ss-accent)' : 'transparent',
+                color: blurIntensity === b.id ? 'white' : 'var(--ss-ink3)',
+                border: 'none', borderRadius: 'calc(14px - 2px)',
                 padding: '6px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 500,
                 fontFamily: 'var(--font-body)', transition: 'all 0.15s',
               }}>{b.label}</button>
@@ -844,7 +844,7 @@ function DisplaySettings() {
 function SnapshotTimeline({ snapshots }) {
   if (!snapshots || snapshots.length === 0) {
     return (
-      <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+      <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--ss-ink3)', fontSize: 13 }}>
         No snapshots yet. Snapshots are saved each time you open the app.
       </div>
     );
@@ -859,22 +859,22 @@ function SnapshotTimeline({ snapshots }) {
         return (
           <div key={i} style={{
             display: 'flex', gap: 16, padding: '10px 0',
-            borderBottom: '1px solid var(--border-subtle)',
+            borderBottom: '1px solid var(--ss-line-soft)',
             alignItems: 'center',
           }}>
             <div style={{ width: 110, flexShrink: 0 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ss-ink)' }}>
                 {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               </div>
-              <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 10.5, color: 'var(--ss-ink3)' }}>
                 {date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 11.5, color: 'var(--ss-ink3)' }}>
                 {(snap.games || []).length} games · {Math.round(totalMinutes / 60).toLocaleString()}h total
               </div>
-              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>
+              <div style={{ fontSize: 10.5, color: 'var(--ss-ink3)', marginTop: 2 }}>
                 {(snap.recentGames || []).slice(0, 3).map(g => g.appid).join(', ') || '—'}
               </div>
             </div>
@@ -921,24 +921,24 @@ function DataSettings() {
     <Section title="Data & Cache">
       <Row label="Saved Snapshots" description="Daily snapshots power the History trend charts.">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{snapshots.length} snapshots</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ss-ink)' }}>{snapshots.length} snapshots</span>
           <button className="btn btn-ghost" onClick={() => setShowLog(s => !s)} style={{ fontSize: 12, padding: '4px 10px' }}>
             {showLog ? 'Hide log' : 'View log'}
           </button>
-          <button className="btn btn-ghost" onClick={clearSnapshots} style={{ fontSize: 12, padding: '4px 10px', color: 'var(--accent-rose)', borderColor: 'var(--accent-rose)' }}>Clear</button>
+          <button className="btn btn-ghost" onClick={clearSnapshots} style={{ fontSize: 12, padding: '4px 10px', color: 'var(--ss-cat-5)', borderColor: 'var(--ss-cat-5)' }}>Clear</button>
         </div>
       </Row>
       {showLog && (
-        <div style={{ padding: '4px 20px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <div style={{ padding: '4px 20px 12px', borderBottom: '1px solid var(--ss-line-soft)' }}>
           <SnapshotTimeline snapshots={snapshots} />
         </div>
       )}
       <Row label="Reset Everything" description="Clears all saved data, config, and reloads the page." last>
-        <button className="btn btn-ghost" onClick={clearAll} style={{ fontSize: 12, padding: '4px 10px', color: 'var(--accent-rose)', borderColor: 'var(--accent-rose)' }}>
+        <button className="btn btn-ghost" onClick={clearAll} style={{ fontSize: 12, padding: '4px 10px', color: 'var(--ss-cat-5)', borderColor: 'var(--ss-cat-5)' }}>
           {cleared === 'all' ? '✓ Reloading...' : 'Reset App'}
         </button>
       </Row>
-      {cleared === 'snapshots' && <div style={{ padding: '8px 20px 12px', fontSize: 12, color: 'var(--accent-emerald)' }}>✓ Snapshots cleared</div>}
+      {cleared === 'snapshots' && <div style={{ padding: '8px 20px 12px', fontSize: 12, color: 'var(--ss-cat-3)' }}>✓ Snapshots cleared</div>}
     </Section>
   );
 }
@@ -968,13 +968,13 @@ function DebugSettings() {
     <Section title="Debug Info">
       {rows.map(([label, value], i) => (
         <Row key={label} label={label} last={i === rows.length - 1}>
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'monospace', maxWidth: 280, textAlign: 'right' }}>{value}</span>
+          <span style={{ fontSize: 12, color: 'var(--ss-ink2)', fontFamily: 'monospace', maxWidth: 280, textAlign: 'right' }}>{value}</span>
         </Row>
       ))}
-      <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border-subtle)' }}>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Share with developer when reporting issues:</div>
+      <div style={{ padding: '12px 20px', borderTop: '1px solid var(--ss-line-soft)' }}>
+        <div style={{ fontSize: 12, color: 'var(--ss-ink3)', marginBottom: 6 }}>Share with developer when reporting issues:</div>
         <textarea readOnly value={JSON.stringify({ health, steamId: config?.steamId, platform: health?.platform, ownedGames: ownedGames.length, recentGames: recentGames.length, localFound: localConfig?.found }, null, 2)}
-          style={{ width: '100%', height: 120, resize: 'vertical', background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '8px 10px', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, outline: 'none' }}
+          style={{ width: '100%', height: 120, resize: 'vertical', background: 'var(--ss-sheet)', border: '1px solid var(--ss-line)', borderRadius: '14px', padding: '8px 10px', color: 'var(--ss-ink2)', fontFamily: 'monospace', fontSize: 11, outline: 'none' }}
         />
       </div>
     </Section>
@@ -1008,32 +1008,32 @@ export default function SettingsModal({ onClose }) {
 
   return (
     <div ref={overlayRef} onClick={handleOverlayClick} style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, animation: 'fadeInFast 0.15s ease' }}>
-      <div style={{ width: '100%', maxWidth: 780, maxHeight: '90vh', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-xl)', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'fadeIn 0.2s ease' }}>
+      <div style={{ width: '100%', maxWidth: 780, maxHeight: '90vh', background: 'var(--ss-sheet)', borderRadius: '26px', border: '1px solid var(--ss-line)', boxShadow: 'var(--ss-shadow)', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'fadeIn 0.2s ease' }}>
         {/* Header */}
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--ss-line-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <div>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>Settings</h2>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Configure your Steam Dashboard</p>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--ss-ink)', marginBottom: 2 }}>Settings</h2>
+            <p style={{ fontSize: 13, color: 'var(--ss-ink3)' }}>Configure your Steam Dashboard</p>
           </div>
-          <button onClick={onClose} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 16, color: 'var(--text-secondary)' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+          <button onClick={onClose} style={{ background: 'var(--ss-inset)', border: '1px solid var(--ss-line)', borderRadius: '14px', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 16, color: 'var(--ss-ink2)' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--ss-btn-hi)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'var(--ss-inset)'}
           >✕</button>
         </div>
         {/* Body */}
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           {/* Sidebar */}
-          <div style={{ width: 200, flexShrink: 0, borderRight: '1px solid var(--border-subtle)', padding: '12px 8px', overflowY: 'auto' }}>
+          <div style={{ width: 200, flexShrink: 0, borderRight: '1px solid var(--ss-line-soft)', padding: '12px 8px', overflowY: 'auto' }}>
             {SECTIONS.map(s => (
               <button key={s.id} onClick={() => setActiveSection(s.id)} style={{
                 width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
-                padding: '9px 12px', borderRadius: 'var(--radius-md)', border: 'none', cursor: 'pointer',
-                background: activeSection === s.id ? 'var(--accent-blue-dim)' : 'transparent',
-                color: activeSection === s.id ? 'var(--accent-blue)' : 'var(--text-secondary)',
+                padding: '9px 12px', borderRadius: '14px', border: 'none', cursor: 'pointer',
+                background: activeSection === s.id ? 'var(--ss-pill-bg)' : 'transparent',
+                color: activeSection === s.id ? 'var(--ss-accent)' : 'var(--ss-ink2)',
                 fontSize: 13, fontWeight: activeSection === s.id ? 600 : 400,
                 fontFamily: 'var(--font-body)', transition: 'all 0.12s', marginBottom: 2,
               }}
-                onMouseEnter={e => { if (activeSection !== s.id) e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
+                onMouseEnter={e => { if (activeSection !== s.id) e.currentTarget.style.background = 'var(--ss-inset)'; }}
                 onMouseLeave={e => { if (activeSection !== s.id) e.currentTarget.style.background = 'transparent'; }}
               >
                 <span style={{ fontSize: 15 }}>{s.icon}</span>{s.label}

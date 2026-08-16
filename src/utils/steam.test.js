@@ -213,23 +213,22 @@ describe('computeYearlyUnlocks', () => {
     expect(result[1].count).toBe(1);
   });
 
-  it('caps top games at 3 and rolls the remainder into "Everything else"', () => {
+  it('caps top games at 5 and rolls the remainder into "Everything else"', () => {
     const ts = Math.floor(new Date('2024-06-01T00:00:00Z').getTime() / 1000);
-    const achCache = {
-      '1': { earnedDetails: Array(10).fill({ unlocktime: ts }) },
-      '2': { earnedDetails: Array(8).fill({ unlocktime: ts }) },
-      '3': { earnedDetails: Array(6).fill({ unlocktime: ts }) },
-      '4': { earnedDetails: Array(4).fill({ unlocktime: ts }) },
-      '5': { earnedDetails: Array(2).fill({ unlocktime: ts }) },
-    };
-    const ownedGames = [1, 2, 3, 4, 5].map(id => ({ appid: id, name: `Game ${id}` }));
+    const counts = [10, 8, 6, 4, 3, 2, 1]; // 7 games; top 5 get named segments
+    const achCache = Object.fromEntries(
+      counts.map((n, i) => [String(i + 1), { earnedDetails: Array(n).fill({ unlocktime: ts }) }])
+    );
+    const ownedGames = counts.map((_, i) => ({ appid: i + 1, name: `Game ${i + 1}` }));
     const result = computeYearlyUnlocks(achCache, ownedGames);
     expect(result).toHaveLength(1);
     const { count, gameCount, segments } = result[0];
-    expect(count).toBe(30);
-    expect(gameCount).toBe(5);
-    expect(segments).toHaveLength(4); // top 3 + "Everything else"
-    expect(segments[3]).toEqual({ name: 'Everything else', count: 6, pct: 0.2 });
+    const total = counts.reduce((s, n) => s + n, 0);
+    const remainder = counts.slice(5).reduce((s, n) => s + n, 0);
+    expect(count).toBe(total);
+    expect(gameCount).toBe(7);
+    expect(segments).toHaveLength(6); // top 5 + "Everything else"
+    expect(segments[5]).toEqual({ name: 'Everything else', count: remainder, pct: remainder / total });
   });
 
   it('segments every year against the same globally-top games, not each year\'s own top 3', () => {
@@ -250,7 +249,7 @@ describe('computeYearlyUnlocks', () => {
     expect(names).not.toContain('Dominant'); // 0-count segments are filtered out
   });
 
-  it('omits the "Everything else" segment when there are 3 or fewer games', () => {
+  it('omits the "Everything else" segment when there are 5 or fewer games', () => {
     const ts = Math.floor(new Date('2024-06-01T00:00:00Z').getTime() / 1000);
     const achCache = { '1': { earnedDetails: [{ unlocktime: ts }] } };
     const result = computeYearlyUnlocks(achCache, [{ appid: 1, name: 'Solo' }]);

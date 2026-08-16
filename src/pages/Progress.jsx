@@ -95,6 +95,8 @@ function MomentumSparkline({ series }) {
   if (withData.length < 2) return null;
   const max = Math.max(...withData.map(d => d.count), 1);
   const min = Math.min(...withData.map(d => d.count));
+  const first = withData[0].count;
+  const last = withData[withData.length - 1].count;
 
   return (
     <div style={{ marginTop: 14 }}>
@@ -111,7 +113,7 @@ function MomentumSparkline({ series }) {
         })}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 10, color: 'var(--ss-ink4)' }}>
-        <span>14 days ago</span><span>Today</span>
+        <span>{first}</span><span>{last} TODAY</span>
       </div>
     </div>
   );
@@ -255,6 +257,7 @@ export default function Progress() {
   const [sortBy, setSortBy] = useState('status');
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
   const [selectedGame, setSelectedGame] = useState(null);
+  const [selectedGameRect, setSelectedGameRect] = useState(null);
 
   const projection = computeBacklogProjection(ownedGames, steamId, hltbCache);
   const unplayedGames = projection.unplayedGames || ownedGames.filter(g => !g.playtime_forever);
@@ -317,8 +320,9 @@ export default function Progress() {
     return () => { cancelled = true; };
   }, [visibleCount, ownedGames.length]);
 
-  const handleSelect = useCallback((game) => {
+  const handleSelect = useCallback((game, e) => {
     setSelectedGame(prev => prev?.appid === game.appid ? null : game);
+    setSelectedGameRect(e ? e.currentTarget.getBoundingClientRect() : null);
   }, []);
 
   const classified = [...unplayedGames, ...visiblePlayed].map(g => ({
@@ -380,18 +384,35 @@ export default function Progress() {
       <div style={{ display: 'grid', gridTemplateColumns: tier ? 'minmax(0,2fr) minmax(0,1fr)' : '1fr', gap: 18 }}>
         {tier ? (
           <div className="ss-panel">
-            <p style={{ fontSize: 12, color: 'var(--ss-ink3)', marginBottom: 16 }}>
-              Projected at your current pace — a rough estimate, not a prediction.
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: 20, borderRadius: 18, background: 'var(--ss-inset)', border: '1px solid var(--ss-line-soft)' }}>
-              <ProgressRing pct={clearedPct} size={64} color={tier.color} textColor="var(--ss-ink)" />
-              <div style={{ fontSize: 44, flexShrink: 0 }}>{tier.emoji}</div>
-              <div>
-                <div style={{ fontSize: 28, fontWeight: 600, color: tier.color, lineHeight: 1.1 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+              <SectionHeading title="Backlog burn-down" />
+              <span style={{ fontSize: 11.5, color: 'var(--ss-ink4)', flexShrink: 0, marginLeft: 12 }}>Projected at your current pace — an estimate, not a prediction</span>
+            </div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 22, padding: '22px 24px', borderRadius: 20,
+              background: 'linear-gradient(155deg, rgba(183,155,245,.18), rgba(183,155,245,.05))',
+              border: '1px solid rgba(183,155,245,.3)', boxShadow: 'inset 0 1px 0 var(--ss-hi)',
+            }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 40, fontWeight: 500, lineHeight: 1, color: tier.color }}>
                   {yearsNeeded < 1 ? `${weeksNeeded} weeks` : `${yearsNeeded} years`}
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--ss-ink2)', marginTop: 2 }}>
-                  to clear your backlog — <span style={{ color: tier.color, fontWeight: 600 }}>{tier.label}</span> · {clearedPct}% cleared
+                <div style={{ fontSize: 13.5, color: 'var(--ss-ink2)', marginTop: 8 }}>
+                  to clear your backlog — <span style={{ color: tier.color, fontWeight: 600 }}>{tier.label}</span>
+                </div>
+              </div>
+              <div style={{ width: 130, height: 130, flexShrink: 0, position: 'relative' }}>
+                <svg viewBox="0 0 130 130" width={130} height={130}>
+                  <circle cx={65} cy={65} r={54} fill="none" stroke="rgba(255,255,255,.09)" strokeWidth={9} />
+                  <circle
+                    cx={65} cy={65} r={54} fill="none" stroke={tier.color} strokeWidth={9} strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 54 * (clearedPct / 100)} ${2 * Math.PI * 54}`}
+                    transform="rotate(-90 65 65)" style={{ transition: 'stroke-dasharray 0.6s ease' }}
+                  />
+                </svg>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: 20, lineHeight: 1, color: 'var(--ss-ink)' }}>{clearedPct}%</span>
+                  <span style={{ fontSize: 10, color: 'var(--ss-ink3)' }}>cleared</span>
                 </div>
               </div>
             </div>
@@ -467,7 +488,7 @@ export default function Progress() {
           <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--ss-ink3)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 12 }}>
             Furthest along
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }}>
             {spotlightGames.map(game => (
               <SpotlightCard
                 key={game.appid} game={game} hltbData={hltbCache[game.name]}
@@ -491,7 +512,7 @@ export default function Progress() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 14 }}>
           {listGames.map(game => (
             <GameStatusCard
               key={game.appid} game={game} hltbData={hltbCache[game.name]}
@@ -505,7 +526,14 @@ export default function Progress() {
             <p style={{ fontSize: 13, color: 'var(--ss-ink3)' }}>
               {visiblePlayed.length} of {playedGames.length} played games classified so far
             </p>
-            <button className="ss-pill" onClick={() => setVisibleCount(c => c + BATCH_SIZE)} style={{ fontSize: 13, padding: '8px 18px' }}>
+            <button
+              onClick={() => setVisibleCount(c => c + BATCH_SIZE)}
+              style={{
+                padding: '10px 20px', borderRadius: 16, cursor: 'pointer', fontSize: 13, color: 'var(--ss-ink)',
+                background: 'linear-gradient(160deg, rgba(111,200,247,.3), rgba(111,200,247,.12))',
+                border: '1px solid rgba(111,200,247,.4)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.22)',
+              }}
+            >
               Load {Math.min(BATCH_SIZE, playedGames.length - visibleCount)} More
             </button>
           </div>
@@ -517,6 +545,7 @@ export default function Progress() {
           game={selectedGame}
           achData={achCache[selectedGame.appid]}
           hltbData={hltbCache[selectedGame.name]}
+          anchorRect={selectedGameRect}
           onClose={() => setSelectedGame(null)}
         />
       )}

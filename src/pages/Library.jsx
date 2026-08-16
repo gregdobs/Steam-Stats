@@ -93,7 +93,9 @@ function DistributionDonut({ games, activeFilter, onFilter }) {
               aria-label={`${arc.key}: ${arc.count} games`}
               tabIndex={0}
               onKeyDown={e => e.key === 'Enter' && onFilter(arc.isSel ? null : { type: 'bucket', value: arc.key, label: arc.key, color: arc.color })}
-            />
+            >
+              <title>{`${arc.key}: ${arc.count} games (${Math.round(arc.fraction * 100)}%) — click to filter`}</title>
+            </path>
           ))}
           <circle cx={CX} cy={CY} r={R_IN - 4} fill="var(--ss-inset)" />
           <text x={CX} y={CY - 8} textAnchor="middle" dominantBaseline="central" fill="var(--ss-ink)" fontSize={22} fontWeight={600}>
@@ -111,6 +113,7 @@ function DistributionDonut({ games, activeFilter, onFilter }) {
           const isSel = activeFilter?.type === 'bucket' && activeFilter.value === b.key;
           return (
             <button key={b.key} onClick={() => onFilter(isSel ? null : { type: 'bucket', value: b.key, label: b.key, color: b.color })}
+              title={`${b.key}: ${count} game${count === 1 ? '' : 's'} — click to filter`}
               className="ss-pill"
               style={{
                 justifyContent: 'flex-start', width: '100%',
@@ -238,6 +241,7 @@ function TopGamesBar({ games, activeFilter, onFilter }) {
             onMouseEnter={() => setHovered(game.appid)}
             onMouseLeave={() => setHovered(null)}
             role="button" tabIndex={0}
+            title={`${game.name} — ${hours >= 100 ? Math.round(hours) : hours.toFixed(1)}h — click to filter`}
             onKeyDown={e => e.key === 'Enter' && onFilter(isSel ? null : { type: 'game', value: game.appid, label: game.name })}
             style={{
               display: 'flex', alignItems: 'center', gap: 10,
@@ -275,9 +279,11 @@ export default function Library() {
   const [sortBy, setSortBy]       = useState('hours');
   const [activeFilter, setActiveFilter] = useState(null);
   const [selectedGame, setSelectedGame] = useState(null);
+  const [selectedGameRect, setSelectedGameRect] = useState(null);
 
-  const handleSelectGame = useCallback((game) => {
+  const handleSelectGame = useCallback((game, e) => {
     setSelectedGame(prev => prev?.appid === game.appid ? null : game);
+    setSelectedGameRect(e ? e.currentTarget.getBoundingClientRect() : null);
   }, []);
 
   const tableRef = useRef(null);
@@ -344,6 +350,9 @@ export default function Library() {
           </div>
           <DistributionDonut games={ownedGames} activeFilter={activeFilter} onFilter={handleFilter} />
           <DerivedStats ownedGames={ownedGames} />
+          <p style={{ margin: '14px 0 0', fontSize: 11, color: 'var(--ss-ink4)', textAlign: 'center' }}>
+            Click a segment to filter every panel on this page
+          </p>
         </div>
 
         <div className="ss-panel">
@@ -415,7 +424,7 @@ export default function Library() {
                         background: isSel ? 'var(--ss-pill-bg)' : '',
                         transition: 'background 0.1s', cursor: 'pointer',
                       }}
-                      onClick={() => handleSelectGame(game)}
+                      onClick={(e) => handleSelectGame(game, e)}
                       onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = 'var(--ss-btn)'; }}
                       onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = ''; }}
                     >
@@ -443,6 +452,7 @@ export default function Library() {
           <GameDetailPanel
             game={selectedGame}
             achData={achCache[selectedGame.appid]}
+            anchorRect={selectedGameRect}
             onClose={() => setSelectedGame(null)}
           />
         )}
