@@ -5,6 +5,7 @@ import { GameHeader } from '../components/GameImage.jsx';
 import GameDetailPanel from '../components/GameDetailPanel.jsx';
 import GenreAllocation from '../components/GenreAllocation.jsx';
 import GameHoverCard from '../components/GameHoverCard.jsx';
+import Tooltip from '../components/Tooltip.jsx';
 import { chartRgba, rampColor, PageHeader, SectionHeading, CrossFilterBanner } from '../components/designSystem.jsx';
 
 // ── Colour tokens ──────────────────────────────────────────────────────────
@@ -42,7 +43,7 @@ function platformLabel(game) {
 
 // ── Interactive SVG Donut ──────────────────────────────────────────────────
 function DistributionDonut({ games, activeFilter, onFilter }) {
-  const [hovered, setHovered] = useState(null);
+  const [hover, setHover] = useState(null); // { key, rect } — drives both the hover scale effect and the tooltip
   const SIZE = 220, CX = 110, CY = 110, R_OUT = 90, R_IN = 56, GAP = 0.022;
 
   const counts = {};
@@ -60,7 +61,7 @@ function DistributionDonut({ games, activeFilter, onFilter }) {
     cursor += fraction * 2 * Math.PI;
 
     const isSel = activeFilter?.type === 'bucket' && activeFilter.value === b.key;
-    const isHov = hovered === b.key;
+    const isHov = hover?.key === b.key;
     const r = isSel ? R_OUT + 8 : isHov ? R_OUT + 4 : R_OUT;
     const ri = isSel ? R_IN - 4 : R_IN;
 
@@ -79,6 +80,13 @@ function DistributionDonut({ games, activeFilter, onFilter }) {
   const centerCount = activeFilter?.type === 'bucket' ? counts[activeFilter.value] : total;
   const centerLabel = activeFilter?.type === 'bucket' ? activeFilter.value : 'total games';
 
+  const hoveredBucket = hover ? BUCKET_META.find(b => b.key === hover.key) : null;
+  const hoveredCount = hoveredBucket ? counts[hoveredBucket.key] : 0;
+  const hoveredPct = total > 0 ? Math.round((hoveredCount / total) * 100) : 0;
+  const tooltipText = hoveredBucket
+    ? `${hoveredBucket.key}: ${hoveredCount} game${hoveredCount === 1 ? '' : 's'} (${hoveredPct}%) — click to filter`
+    : null;
+
   return (
     <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
       <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -91,15 +99,13 @@ function DistributionDonut({ games, activeFilter, onFilter }) {
               opacity={activeFilter?.type === 'bucket' && !arc.isSel ? 0.35 : 1}
               style={{ cursor: 'pointer', transition: 'opacity 0.2s' }}
               onClick={() => onFilter(arc.isSel ? null : { type: 'bucket', value: arc.key, label: arc.key, color: arc.color })}
-              onMouseEnter={() => setHovered(arc.key)}
-              onMouseLeave={() => setHovered(null)}
+              onMouseEnter={e => setHover({ key: arc.key, rect: e.currentTarget.getBoundingClientRect() })}
+              onMouseLeave={() => setHover(null)}
               role="button"
               aria-label={`${arc.key}: ${arc.count} games`}
               tabIndex={0}
               onKeyDown={e => e.key === 'Enter' && onFilter(arc.isSel ? null : { type: 'bucket', value: arc.key, label: arc.key, color: arc.color })}
-            >
-              <title>{`${arc.key}: ${arc.count} games (${Math.round(arc.fraction * 100)}%) — click to filter`}</title>
-            </path>
+            />
           ))}
           <circle cx={CX} cy={CY} r={R_IN - 4} fill="var(--ss-inset)" />
           <text x={CX} y={CY - 8} textAnchor="middle" dominantBaseline="central" fill="var(--ss-ink)" fontSize={22} fontWeight={600}>
@@ -109,6 +115,7 @@ function DistributionDonut({ games, activeFilter, onFilter }) {
             {centerLabel}
           </text>
         </svg>
+        <Tooltip text={tooltipText} anchorRect={hover?.rect} />
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 160 }}>
@@ -117,7 +124,8 @@ function DistributionDonut({ games, activeFilter, onFilter }) {
           const isSel = activeFilter?.type === 'bucket' && activeFilter.value === b.key;
           return (
             <button key={b.key} onClick={() => onFilter(isSel ? null : { type: 'bucket', value: b.key, label: b.key, color: b.color })}
-              title={`${b.key}: ${count} game${count === 1 ? '' : 's'} — click to filter`}
+              onMouseEnter={e => setHover({ key: b.key, rect: e.currentTarget.getBoundingClientRect() })}
+              onMouseLeave={() => setHover(null)}
               className="ss-pill"
               style={{
                 justifyContent: 'flex-start', width: '100%',
