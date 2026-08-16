@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
 import { formatHours, minutesToHours, getGameHeaderUrl, loadSnapshots, fetchGenres } from '../utils/steam.js';
+import useFocusTrap from '../hooks/useFocusTrap.js';
 
 const PERIODS = [
   { id: 'week', label: 'This Week' },
@@ -42,6 +43,14 @@ export default function ShareCard({ onClose }) {
   const [pngUrl, setPngUrl] = useState(null);
   const [genreData, setGenreData] = useState({});
   const canvasRef = useRef(null);
+  const panelRef = useRef(null);
+  useFocusTrap(true, panelRef);
+
+  useEffect(() => {
+    const h = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
 
   // Pre-fetch genres for the games likely to appear on the card so the
   // "mostly X & Y" chip can render without an extra loading state.
@@ -336,17 +345,17 @@ export default function ShareCard({ onClose }) {
         animation: 'fadeInFast 0.15s ease',
       }}
     >
-      <div style={{
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="sharecard-modal-title" tabIndex={-1} style={{
         width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto',
         background: 'var(--ss-sheet)', borderRadius: '26px',
         border: '1px solid var(--ss-line)', boxShadow: 'var(--ss-shadow)',
-        padding: 24,
+        padding: 24, outline: 'none',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--ss-ink)' }}>
+          <h2 id="sharecard-modal-title" style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--ss-ink)' }}>
             Share Card
           </h2>
-          <button onClick={onClose} style={{ background: 'var(--ss-inset)', border: '1px solid var(--ss-line)', borderRadius: '14px', width: 30, height: 30, cursor: 'pointer', color: 'var(--ss-ink2)' }}>✕</button>
+          <button onClick={onClose} aria-label="Close" style={{ background: 'var(--ss-inset)', border: '1px solid var(--ss-line)', borderRadius: '14px', width: 30, height: 30, cursor: 'pointer', color: 'var(--ss-ink2)' }}>✕</button>
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>

@@ -5,9 +5,71 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { execFile } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// ─────────────────────────────────────────────
+// PERSISTENT DATA DIRECTORY
+// release/ gets deleted and rebuilt from scratch by build-release.js on
+// every `npm run build:release`, so anything stored next to server.js
+// (as the caches below used to be) is lost the moment a user replaces
+// their install folder with a new release. Storing everything in the
+// OS-standard per-user data location instead means it survives that —
+// and gives the user one real, browsable folder for what this app
+// persists (config, snapshot history, API caches) instead of it being
+// scattered across dotfiles and browser localStorage.
+// ─────────────────────────────────────────────
+function getDataDir() {
+  if (process.platform === 'win32') {
+    return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'SteamStats');
+  }
+  if (process.platform === 'darwin') {
+    return path.join(os.homedir(), 'Library', 'Application Support', 'SteamStats');
+  }
+  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'SteamStats');
+}
+
+const DATA_DIR = getDataDir();
+const CACHE_DIR = path.join(DATA_DIR, 'cache');
+fs.mkdirSync(CACHE_DIR, { recursive: true });
+
+// One-time migration: earlier versions kept these dotfiles next to
+// server.js. Move them into the persistent folder the first time this
+// runs so upgrading users don't lose their existing caches.
+function migrateLegacyFile(oldPath, newPath) {
+  if (!fs.existsSync(oldPath) || fs.existsSync(newPath)) return;
+  try {
+    fs.renameSync(oldPath, newPath);
+  } catch {
+    try {
+      fs.copyFileSync(oldPath, newPath);
+      fs.unlinkSync(oldPath);
+    } catch {}
+  }
+}
+migrateLegacyFile(path.join(__dirname, '.genre-cache.json'), path.join(CACHE_DIR, 'genre-cache.json'));
+migrateLegacyFile(path.join(__dirname, '.rarity-cache.json'), path.join(CACHE_DIR, 'rarity-cache.json'));
+migrateLegacyFile(path.join(__dirname, '.hltb-state.json'), path.join(CACHE_DIR, 'hltb-state.json'));
+
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
+const SNAPSHOTS_FILE = path.join(DATA_DIR, 'snapshots.json');
+
+function readJsonFile(filePath, fallback) {
+  try {
+    if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {}
+  return fallback;
+}
+
+function writeJsonFile(filePath, data) {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.warn(`Failed to write ${filePath}:`, err.message);
+  }
+}
 
 const app = express();
 const PORT = 3001;
@@ -151,7 +213,7 @@ app.get('/api/steam/recent-games', async (req, res) => {
 // so we fetch slowly in the background and cache aggressively.
 // ─────────────────────────────────────────────
 
-const GENRE_CACHE_FILE = path.join(__dirname, '.genre-cache.json');
+const GENRE_CACHE_FILE = path.join(CACHE_DIR, 'genre-cache.json');
 let genreCache = {};
 let genreFetchQueue = [];
 let genreFetchInProgress = false;
@@ -307,6 +369,17 @@ app.post('/api/steam/genres/retry-rate-limited', (req, res) => {
   res.json({ cleared });
 });
 
+// Full manual clear — everything gets re-fetched lazily as the user
+// browses (see processGenreQueue), so this is safe: slower next load for
+// a big library, no data loss.
+app.post('/api/steam/genres/clear-cache', (req, res) => {
+  const cleared = Object.keys(genreCache).length;
+  genreCache = {};
+  saveGenreCache();
+  console.log(`🗑️  Genre cache cleared (${cleared} entries)`);
+  res.json({ cleared });
+});
+
 app.get('/api/steam/achievements', async (req, res) => {
   const { apiKey, steamId, appId } = req.query;
   try {
@@ -383,7 +456,7 @@ app.get('/api/steam/achievements-batch', async (req, res) => {
 // Cached like genres — percentages drift slowly, so a stale re-fetch window
 // of a month is plenty fresh for a "rarest achievements you own" widget.
 // ─────────────────────────────────────────────
-const RARITY_CACHE_FILE = path.join(__dirname, '.rarity-cache.json');
+const RARITY_CACHE_FILE = path.join(CACHE_DIR, 'rarity-cache.json');
 let rarityCache = {};
 const RARITY_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -440,6 +513,16 @@ app.post('/api/steam/achievement-rarity', async (req, res) => {
   res.json({ percentages: result });
 });
 
+// Full manual clear — re-fetched on demand per game (only when its
+// achievements are actually viewed), so this is safe: no data loss.
+app.post('/api/steam/achievement-rarity/clear-cache', (req, res) => {
+  const cleared = Object.keys(rarityCache).length;
+  rarityCache = {};
+  saveRarityCache();
+  console.log(`🗑️  Achievement rarity cache cleared (${cleared} entries)`);
+  res.json({ cleared });
+});
+
 // ─────────────────────────────────────────────
 // ARTWORK FALLBACK
 // The flat cdn.akamai.steamstatic.com/steam/apps/{appid}/{file}.jpg paths
@@ -486,7 +569,7 @@ const HLTB_BASE        = 'https://howlongtobeat.com';
 const HLTB_SEARCH_URL  = `${HLTB_BASE}/api/bleed`;
 const HLTB_INIT_URL    = `${HLTB_BASE}/api/bleed/init`;
 const HLTB_TOKEN_TTL   = 4 * 60 * 1000; // refresh every 4 min (token valid ~5 min)
-const HLTB_STATE_FILE  = path.join(__dirname, '.hltb-state.json');
+const HLTB_STATE_FILE  = path.join(CACHE_DIR, 'hltb-state.json');
 
 // Runtime state — populated by fetchHltbAuthToken()
 let hltb = {
@@ -776,8 +859,10 @@ app.post('/api/hltb/clear-cache', (req, res) => {
 // LOCAL STEAM VDF READER
 // ─────────────────────────────────────────────
 
-// Runtime custom path override — set by user via Settings without editing server.js
-let customSteamPath = null;
+// Custom path override — set by user via Settings without editing server.js.
+// Persisted to config.json so it survives restarts (previously in-memory
+// only, so it silently reset every time the app launched).
+let customSteamPath = readJsonFile(CONFIG_FILE, {}).customSteamPath || null;
 
 function findSteamPaths() {
   const platform = os.platform();
@@ -920,6 +1005,10 @@ app.get('/api/local/steam-config', async (req, res) => {
 
 app.get('/api/local/artwork', async (req, res) => {
   const { appId } = req.query;
+  // appId is interpolated directly into a filesystem path below — Steam
+  // app IDs are always numeric, so reject anything else before it can be
+  // used to construct a path (e.g. "../" segments).
+  if (!/^\d+$/.test(appId || '')) return res.status(400).json({ error: 'invalid appId' });
   const steamPaths = findSteamPaths();
   if (steamPaths.length === 0) return res.status(404).json({ error: 'Steam not found' });
   const steamPath = steamPaths[0];
@@ -942,6 +1031,7 @@ app.post('/api/settings/set-steam-path', async (req, res) => {
   const { steamPath } = req.body;
   if (!steamPath) {
     customSteamPath = null;
+    writeJsonFile(CONFIG_FILE, { ...readJsonFile(CONFIG_FILE, {}), customSteamPath: null });
     console.log('🔄 Custom Steam path cleared — using auto-detection');
     return res.json({ cleared: true });
   }
@@ -952,11 +1042,73 @@ app.post('/api/settings/set-steam-path', async (req, res) => {
       return res.json({ valid: false, error: 'Path exists but no userdata folder found — is this your Steam installation folder?' });
     }
     customSteamPath = steamPath;
+    writeJsonFile(CONFIG_FILE, { ...readJsonFile(CONFIG_FILE, {}), customSteamPath });
     console.log(`✅ Custom Steam path set: ${steamPath}`);
     res.json({ valid: true, steamPath });
   } catch (err) {
     res.json({ valid: false, error: err.message });
   }
+});
+
+// ─────────────────────────────────────────────
+// PERSISTENT CONFIG & SNAPSHOT MIRROR
+// The frontend's source of truth for app config (API key, Steam ID, theme)
+// and snapshot history stays localStorage — it's synchronous, and the core
+// stats logic in src/utils/steam.js reads it on every render, so switching
+// that to an async store is a much bigger change than this app needs. But
+// every save also mirrors here, so the data lives in the visible, durable
+// data folder instead of being locked inside one browser profile — and on
+// a fresh/cleared browser profile, the frontend can pull it back.
+// ─────────────────────────────────────────────
+
+app.get('/api/user-config', (req, res) => {
+  const { appConfig } = readJsonFile(CONFIG_FILE, {});
+  res.json({ appConfig: appConfig || null });
+});
+
+app.post('/api/user-config', (req, res) => {
+  writeJsonFile(CONFIG_FILE, { ...readJsonFile(CONFIG_FILE, {}), appConfig: req.body });
+  res.json({ saved: true });
+});
+
+app.delete('/api/user-config', (req, res) => {
+  const current = readJsonFile(CONFIG_FILE, {});
+  delete current.appConfig;
+  writeJsonFile(CONFIG_FILE, current);
+  res.json({ cleared: true });
+});
+
+app.get('/api/snapshots/:steamId', (req, res) => {
+  const all = readJsonFile(SNAPSHOTS_FILE, {});
+  res.json({ snapshots: all[req.params.steamId] || [] });
+});
+
+app.post('/api/snapshots/:steamId', (req, res) => {
+  const { snapshots } = req.body;
+  if (!Array.isArray(snapshots)) return res.status(400).json({ error: 'snapshots array required' });
+  const all = readJsonFile(SNAPSHOTS_FILE, {});
+  all[req.params.steamId] = snapshots;
+  writeJsonFile(SNAPSHOTS_FILE, all);
+  res.json({ saved: true });
+});
+
+app.delete('/api/snapshots/:steamId', (req, res) => {
+  const all = readJsonFile(SNAPSHOTS_FILE, {});
+  delete all[req.params.steamId];
+  writeJsonFile(SNAPSHOTS_FILE, all);
+  res.json({ cleared: true });
+});
+
+app.get('/api/data-folder', (req, res) => {
+  res.json({ path: DATA_DIR });
+});
+
+app.post('/api/data-folder/open', (req, res) => {
+  const opener = process.platform === 'win32' ? 'explorer'
+    : process.platform === 'darwin' ? 'open'
+    : 'xdg-open';
+  execFile(opener, [DATA_DIR], () => {});
+  res.json({ opened: true, path: DATA_DIR });
 });
 
 app.post('/api/settings/test-steam-path', async (req, res) => {
@@ -986,6 +1138,8 @@ app.get('/api/health', (req, res) => {
     hltbTokenCached: !!(hltb.manualToken || (hltb.token && Date.now() < hltb.expiry)),
     hltbCacheSize: hltbCache.size,
     genreCacheSize: Object.keys(genreCache).length,
+    rarityCacheSize: Object.keys(rarityCache).length,
+    dataDir: DATA_DIR,
   });
 });
 
@@ -1011,8 +1165,13 @@ if (distExists) {
   console.log(`✅ Serving built frontend from ${DIST_DIR}`);
 }
 
-app.listen(PORT, () => {
+// Bound to loopback only — this is a single-user local app with no reason
+// to be reachable from other devices. Without an explicit host, Express
+// defaults to 0.0.0.0 (all interfaces), which would expose the local Steam
+// data endpoints and settings routes to anyone else on the same network.
+app.listen(PORT, '127.0.0.1', () => {
   console.log(`\n🎮 Steam Stats Server running on http://localhost:${PORT}`);
+  console.log(`💾 Data folder: ${DATA_DIR}`);
   const steamPaths = findSteamPaths();
   if (steamPaths.length > 0) {
     console.log(`✅ Steam installation found: ${steamPaths[0]}`);

@@ -1,22 +1,24 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   fetchPlayerSummary, fetchOwnedGames, fetchRecentGames,
   fetchLocalSteamConfig, extractSteamId, resolveVanityUrl, saveConfig, loadConfig,
   saveSnapshot, loadSnapshots, mergeLocalData, computeHistoricalTrends, fetchHLTB,
-  fetchAchievementsBatch
+  fetchAchievementsBatch, hydrateConfigFromServer
 } from '../utils/steam.js';
 import { THEME_BASE_BLUR, BLUR_MULTIPLIERS } from '../utils/themes.js';
 
 const AppContext = createContext(null);
 
-const HLTB_CACHE_KEY = 'steam_dashboard_hltb_cache';
+// Exported so Settings can clear these without re-hardcoding the keys
+// (the ACH_CACHE_KEY version suffix in particular needs to stay in sync).
+export const HLTB_CACHE_KEY = 'steam_dashboard_hltb_cache';
 // v2: cached entries now also carry earnedDetails (per-achievement name/icon/
 // unlock time), used by the Achievement Rarity widget — bumped so older
 // cached entries that predate that field get refetched instead of being
 // treated as already-complete and silently missing rarity data forever.
 // v3: earnedDetails entries also carry `description`, used by the
 // achievement detail sheet — same reasoning, same fix.
-const ACH_CACHE_KEY = 'steam_dashboard_achievement_cache_v3';
+export const ACH_CACHE_KEY = 'steam_dashboard_achievement_cache_v3';
 
 function loadHltbCacheFromStorage() {
   try { return JSON.parse(localStorage.getItem(HLTB_CACHE_KEY) || '{}'); }
@@ -197,11 +199,20 @@ export function AppProvider({ children }) {
     }
   }, []);
 
-  // Auto-load if config exists
+  // Auto-load if config exists. Falls back to the server-mirrored config
+  // (persistent data folder) when localStorage has nothing — e.g. a
+  // cleared browser profile — so the user doesn't have to re-enter their
+  // API key just because the browser lost its storage.
   useEffect(() => {
     const saved = loadConfig();
     if (saved.apiKey && saved.steamUrl && !dataLoaded) {
       loadData(saved.apiKey, saved.steamUrl);
+    } else if (!saved.apiKey) {
+      hydrateConfigFromServer().then(hydrated => {
+        if (hydrated?.apiKey && hydrated?.steamUrl) {
+          loadData(hydrated.apiKey, hydrated.steamUrl);
+        }
+      });
     }
   }, []);
 
@@ -280,22 +291,41 @@ export function AppProvider({ children }) {
   const totalHoursRecent = recentGames.reduce((sum, g) => sum + (g.playtime_2weeks || 0), 0) / 60;
   const gamesPlayed = ownedGames.filter(g => g.playtime_forever > 0).length;
 
+  // Memoized so components consuming useApp() only re-render when a value
+  // they actually depend on changes, instead of on every AppProvider
+  // render — an inline object literal here would otherwise be a new
+  // reference every time and re-render the entire app tree.
+  const contextValue = useMemo(() => ({
+    theme, setTheme,
+    blurIntensity, setBlurIntensity,
+    config, setConfig,
+    activePage, setActivePage,
+    timePeriod, setTimePeriod,
+    profile, ownedGames, recentGames, localConfig, historicalTrends,
+    loading, loadingPhase, error, dataLoaded,
+    loadData,
+    getGamesForPeriod,
+    totalHoursAllTime, totalHoursRecent, gamesPlayed,
+    steamId: config?.steamId,
+    hltbCache, getHltbForGame,
+    achCache, getAchievementsForGames,
+  }), [
+    theme, setTheme,
+    blurIntensity, setBlurIntensity,
+    config, setConfig,
+    activePage, setActivePage,
+    timePeriod, setTimePeriod,
+    profile, ownedGames, recentGames, localConfig, historicalTrends,
+    loading, loadingPhase, error, dataLoaded,
+    loadData,
+    getGamesForPeriod,
+    totalHoursAllTime, totalHoursRecent, gamesPlayed,
+    hltbCache, getHltbForGame,
+    achCache, getAchievementsForGames,
+  ]);
+
   return (
-    <AppContext.Provider value={{
-      theme, setTheme,
-      blurIntensity, setBlurIntensity,
-      config, setConfig,
-      activePage, setActivePage,
-      timePeriod, setTimePeriod,
-      profile, ownedGames, recentGames, localConfig, historicalTrends,
-      loading, loadingPhase, error, dataLoaded,
-      loadData,
-      getGamesForPeriod,
-      totalHoursAllTime, totalHoursRecent, gamesPlayed,
-      steamId: config?.steamId,
-      hltbCache, getHltbForGame,
-      achCache, getAchievementsForGames,
-    }}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );

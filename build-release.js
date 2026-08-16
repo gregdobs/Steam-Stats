@@ -103,6 +103,88 @@ const releasePkgJson = {
 fs.writeFileSync(path.join(RELEASE_DIR, 'package.json'), JSON.stringify(releasePkgJson, null, 2));
 run('npm install --omit=dev --no-audit --no-fund', { cwd: RELEASE_DIR });
 
+// 6b. Generate third-party license notices for everything actually
+//     redistributed in this folder — the server's real installed
+//     node_modules (whatever npm resolved above, backend + transitive),
+//     plus the frontend libraries compiled into dist/'s JS bundle (those
+//     never get their own node_modules in the release folder since
+//     they're bundled by Vite, so their runtime dependency tree is
+//     walked from the main project's node_modules instead). Generated
+//     fresh on every build so it can't go stale as dependencies change.
+console.log('\nCollecting third-party license notices...');
+
+function listInstalledPackages(nodeModulesDir) {
+  const pkgJsonPaths = [];
+  if (!fs.existsSync(nodeModulesDir)) return pkgJsonPaths;
+  for (const entry of fs.readdirSync(nodeModulesDir)) {
+    if (entry.startsWith('.')) continue;
+    const entryPath = path.join(nodeModulesDir, entry);
+    if (!fs.statSync(entryPath).isDirectory()) continue;
+    if (entry.startsWith('@')) {
+      for (const scoped of fs.readdirSync(entryPath)) {
+        const pkgJsonPath = path.join(entryPath, scoped, 'package.json');
+        if (fs.existsSync(pkgJsonPath)) pkgJsonPaths.push(pkgJsonPath);
+      }
+    } else {
+      const pkgJsonPath = path.join(entryPath, 'package.json');
+      if (fs.existsSync(pkgJsonPath)) pkgJsonPaths.push(pkgJsonPath);
+    }
+  }
+  return pkgJsonPaths;
+}
+
+function collectRuntimeDepTree(rootNodeModules, entryNames) {
+  const seen = new Map();
+  function visit(name) {
+    if (seen.has(name)) return;
+    const pkgJsonPath = path.join(rootNodeModules, name, 'package.json');
+    if (!fs.existsSync(pkgJsonPath)) return;
+    seen.set(name, pkgJsonPath);
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+    for (const dep of Object.keys(pkg.dependencies || {})) visit(dep);
+  }
+  entryNames.forEach(visit);
+  return [...seen.values()];
+}
+
+function toLicenseEntries(pkgJsonPaths) {
+  const entries = [];
+  for (const p of pkgJsonPaths) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+      const license = pkg.license || (Array.isArray(pkg.licenses) ? pkg.licenses.map(l => l.type).join(' OR ') : 'UNKNOWN');
+      entries.push({ name: pkg.name, version: pkg.version, license });
+    } catch {}
+  }
+  return entries;
+}
+
+const FRONTEND_BUNDLED_DEPS = ['react', 'react-dom', 'chart.js', 'react-chartjs-2'];
+const serverEntries = toLicenseEntries(listInstalledPackages(path.join(RELEASE_DIR, 'node_modules')));
+const frontendEntries = toLicenseEntries(collectRuntimeDepTree(path.join(__dirname, 'node_modules'), FRONTEND_BUNDLED_DEPS));
+
+const merged = new Map();
+for (const e of [...serverEntries, ...frontendEntries]) merged.set(e.name, e);
+const sortedEntries = [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+const noticeLines = [
+  'Steam Stats — Third-Party Licenses',
+  '===================================',
+  '',
+  'Steam Stats is MIT-licensed (see LICENSE). It is built with the open-source',
+  'packages below, each used under its own license (SPDX identifier shown).',
+  'Full license text for any package is available in its own repository, or,',
+  "for the server-side packages, under this folder's node_modules/<name>/.",
+  '',
+  ...sortedEntries.map(e => `  ${e.name}@${e.version} — ${e.license}`),
+  '',
+];
+fs.writeFileSync(path.join(RELEASE_DIR, 'THIRD_PARTY_LICENSES.txt'), noticeLines.join('\n'));
+console.log(`✅ Third-party license notice written (${sortedEntries.length} packages)`);
+
+// Also ship the app's own license.
+fs.copyFileSync(path.join(__dirname, 'LICENSE'), path.join(RELEASE_DIR, 'LICENSE'));
+
 // 7. Write the launcher — a visible-console .bat. Keeping the console
 //    window visible (rather than a hidden tray-icon launcher) is a
 //    deliberate simplification: it's the fully verified, zero-extra-
@@ -130,6 +212,13 @@ HOW TO RUN:
 1. Double-click "Start Steam Stats.bat" — a console window opens showing
    startup logs. Your browser opens automatically once the server is ready.
 
+WINDOWS SMARTSCREEN WARNING:
+- The first time you run this, Windows will show a blue "Windows protected
+  your PC" screen. This is expected — Steam Stats.exe isn't code-signed
+  (that costs money and this is a free hobby project), so Windows doesn't
+  yet recognize the publisher. Click "More info", then "Run anyway". This
+  only appears once per machine.
+
 FIRST-TIME SETUP:
 - You'll need a free Steam Web API key from:
   https://steamcommunity.com/dev/apikey
@@ -148,6 +237,13 @@ This folder is self-contained — you can move it anywhere, but keep all the
 files together (don't move Steam Stats.exe out on its own). It includes its
 own Node.js runtime (node.exe), so nothing else needs to be installed on
 this computer.
+
+YOUR DATA / UPDATING TO A NEW RELEASE:
+- Your API key, Steam ID, snapshot history, and caches are stored OUTSIDE
+  this folder, at %APPDATA%\\SteamStats — not inside "release". That means
+  you can safely delete this whole folder and unzip a new release version
+  in its place; your data stays put. Settings > Data & Cache > Open Folder
+  opens it directly from inside the app.
 `);
 
 console.log('\n✅ Release built successfully!');

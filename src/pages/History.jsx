@@ -104,7 +104,7 @@ function MonthlyUnlocksChart({ months, appidToHeader }) {
                 {sel.count} unlocked · {sel.count > avg ? 'above' : 'below'} the {avg}/month average shown here
               </div>
             </div>
-            <button onClick={() => setSelected(null)} className="ss-pill" style={{ width: 28, height: 28, padding: 0, justifyContent: 'center' }}>✕</button>
+            <button onClick={() => setSelected(null)} aria-label="Close month detail" className="ss-pill" style={{ width: 28, height: 28, padding: 0, justifyContent: 'center' }}>✕</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {sel.games.slice(0, 6).map(g => {

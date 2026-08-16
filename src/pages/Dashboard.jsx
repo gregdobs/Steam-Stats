@@ -460,7 +460,7 @@ function TimeBreakdownDrill({ game, timePeriod, totalPeriodMinutes, onOpen, onCl
         <button onClick={onOpen} style={{ padding: '9px 15px', borderRadius: 14, background: 'var(--ss-btn)', border: '1px solid var(--ss-line)', color: 'var(--ss-ink)', fontSize: 12.5, cursor: 'pointer', flexShrink: 0 }}>
           Full detail
         </button>
-        <button onClick={onClear} style={{ width: 32, height: 32, borderRadius: 11, background: 'var(--ss-btn)', border: '1px solid var(--ss-line)', color: 'var(--ss-ink2)', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>✕</button>
+        <button onClick={onClear} aria-label="Clear selection" style={{ width: 32, height: 32, borderRadius: 11, background: 'var(--ss-btn)', border: '1px solid var(--ss-line)', color: 'var(--ss-ink2)', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>✕</button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${stats.length}, minmax(0,1fr))`, gap: 12 }}>
         {stats.map(s => (

@@ -23,13 +23,12 @@ dist-ssr
 *.sln
 *.sw?
 
-# HLTB session state (contains tokens, regenerated automatically)
+# Legacy cache dotfiles — server.js now stores these under the OS user
+# data folder (see getDataDir() in server.js) and migrates any leftover
+# copies of these out of the repo root on startup. Keeping the patterns
+# here defensively in case an old clone still has them.
 .hltb-state.json
-
-# Genre cache (regenerated automatically, can be large)
 .genre-cache.json
-
-# Achievement rarity cache (regenerated automatically)
 .rarity-cache.json
 
 # Release build output

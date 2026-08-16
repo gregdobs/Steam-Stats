@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useApp } from '../hooks/useAppContext.jsx';
-import { saveConfig, formatHours, formatLastPlayed } from '../utils/steam.js';
+import { useApp, HLTB_CACHE_KEY, ACH_CACHE_KEY } from '../hooks/useAppContext.jsx';
+import { saveConfig, formatHours, formatLastPlayed, clearServerMirrors } from '../utils/steam.js';
+import useFocusTrap from '../hooks/useFocusTrap.js';
 import { GameHeader } from './GameImage.jsx';
 import GameDetailPanel from './GameDetailPanel.jsx';
 import { loadFeatureFlags, saveFeatureFlags } from './Navbar.jsx';
@@ -894,6 +895,9 @@ function DataSettings() {
   const [snapshots, setSnapshots] = useState([]);
   const [cleared, setCleared] = useState('');
   const [showLog, setShowLog] = useState(false);
+  const [dataFolder, setDataFolder] = useState('');
+  const [cacheCounts, setCacheCounts] = useState(null);
+  const [clearingCache, setClearingCache] = useState(false);
 
   useEffect(() => {
     try {
@@ -902,23 +906,82 @@ function DataSettings() {
     } catch {}
   }, [steamId]);
 
-  const clearSnapshots = () => {
+  useEffect(() => {
+    fetch('/api/data-folder').then(r => r.json()).then(d => setDataFolder(d.path || '')).catch(() => {});
+  }, []);
+
+  const refreshCacheCounts = useCallback(() => {
+    fetch('/api/health').then(r => r.json()).then(h => {
+      let achCount = 0, hltbLocalCount = 0;
+      try { achCount = Object.keys(JSON.parse(localStorage.getItem(ACH_CACHE_KEY) || '{}')).length; } catch {}
+      try { hltbLocalCount = Object.keys(JSON.parse(localStorage.getItem(HLTB_CACHE_KEY) || '{}')).length; } catch {}
+      setCacheCounts({
+        genres: h.genreCacheSize ?? 0,
+        rarity: h.rarityCacheSize ?? 0,
+        hltb: (h.hltbCacheSize ?? 0) + hltbLocalCount,
+        achievements: achCount,
+      });
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => { refreshCacheCounts(); }, [refreshCacheCounts]);
+
+  const openDataFolder = () => {
+    fetch('/api/data-folder/open', { method: 'POST' }).catch(() => {});
+  };
+
+  // Clears only re-fetchable lookup caches (genres, achievement rarity %,
+  // HowLongToBeat results). Safe by design: none of this is data the app
+  // can't regenerate on its own, so nothing here is destructive the way
+  // clearing snapshots or resetting the app is — it just means the next
+  // load re-fetches from Steam/HowLongToBeat instead of reading a cache,
+  // which can take a few minutes for a large library.
+  const clearCaches = async () => {
+    setClearingCache(true);
+    try {
+      await Promise.all([
+        fetch('/api/steam/genres/clear-cache', { method: 'POST' }),
+        fetch('/api/steam/achievement-rarity/clear-cache', { method: 'POST' }),
+        fetch('/api/hltb/clear-cache', { method: 'POST' }),
+      ]);
+    } catch {}
+    localStorage.removeItem(HLTB_CACHE_KEY);
+    localStorage.removeItem(ACH_CACHE_KEY);
+    setClearingCache(false);
+    setCleared('cache');
+    refreshCacheCounts();
+  };
+
+  const clearSnapshots = async () => {
     try {
       const all = JSON.parse(localStorage.getItem('steam_dashboard_snapshots') || '{}');
       delete all[steamId];
       localStorage.setItem('steam_dashboard_snapshots', JSON.stringify(all));
       setSnapshots([]); setCleared('snapshots');
     } catch {}
+    await clearServerMirrors(steamId);
   };
 
-  const clearAll = () => {
-    ['steam_dashboard_snapshots','steam_dashboard_config','steam_theme'].forEach(k => localStorage.removeItem(k));
+  const clearAll = async () => {
+    ['steam_dashboard_snapshots','steam_dashboard_config','steam_theme',HLTB_CACHE_KEY,ACH_CACHE_KEY].forEach(k => localStorage.removeItem(k));
+    await Promise.all([
+      clearServerMirrors(steamId),
+      fetch('/api/steam/genres/clear-cache', { method: 'POST' }).catch(() => {}),
+      fetch('/api/steam/achievement-rarity/clear-cache', { method: 'POST' }).catch(() => {}),
+      fetch('/api/hltb/clear-cache', { method: 'POST' }).catch(() => {}),
+    ]);
     setCleared('all');
     setTimeout(() => window.location.reload(), 800);
   };
 
   return (
     <Section title="Data & Cache">
+      <Row label="Data Folder" description="Config, snapshot history, and caches are kept here — survives app updates.">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 11, color: 'var(--ss-ink3)', fontFamily: 'monospace', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={dataFolder}>{dataFolder || '—'}</span>
+          <button className="btn btn-ghost" onClick={openDataFolder} style={{ fontSize: 12, padding: '4px 10px' }} disabled={!dataFolder}>Open Folder</button>
+        </div>
+      </Row>
       <Row label="Saved Snapshots" description="Daily snapshots power the History trend charts.">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ss-ink)' }}>{snapshots.length} snapshots</span>
@@ -933,12 +996,23 @@ function DataSettings() {
           <SnapshotTimeline snapshots={snapshots} />
         </div>
       )}
+      <Row label="Regenerable Caches" description="Genre tags, achievement rarity %, and HowLongToBeat lookups. Safe to clear — just re-fetched as needed, which can take a few minutes for a large library.">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--ss-ink3)' }}>
+            {cacheCounts ? `${cacheCounts.genres} genres · ${cacheCounts.rarity} rarity · ${cacheCounts.hltb} HLTB · ${cacheCounts.achievements} achievements` : '—'}
+          </span>
+          <button className="btn btn-ghost" onClick={clearCaches} disabled={clearingCache} style={{ fontSize: 12, padding: '4px 10px' }}>
+            {clearingCache ? 'Clearing...' : 'Clear Cache'}
+          </button>
+        </div>
+      </Row>
       <Row label="Reset Everything" description="Clears all saved data, config, and reloads the page." last>
         <button className="btn btn-ghost" onClick={clearAll} style={{ fontSize: 12, padding: '4px 10px', color: 'var(--ss-cat-5)', borderColor: 'var(--ss-cat-5)' }}>
           {cleared === 'all' ? '✓ Reloading...' : 'Reset App'}
         </button>
       </Row>
       {cleared === 'snapshots' && <div style={{ padding: '8px 20px 12px', fontSize: 12, color: 'var(--ss-cat-3)' }}>✓ Snapshots cleared</div>}
+      {cleared === 'cache' && <div style={{ padding: '8px 20px 12px', fontSize: 12, color: 'var(--ss-cat-3)' }}>✓ Caches cleared</div>}
     </Section>
   );
 }
@@ -985,6 +1059,8 @@ function DebugSettings() {
 export default function SettingsModal({ onClose }) {
   const [activeSection, setActiveSection] = useState('connection');
   const overlayRef = useRef(null);
+  const panelRef = useRef(null);
+  useFocusTrap(true, panelRef);
 
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') onClose(); };
@@ -1008,14 +1084,14 @@ export default function SettingsModal({ onClose }) {
 
   return (
     <div ref={overlayRef} onClick={handleOverlayClick} style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, animation: 'fadeInFast 0.15s ease' }}>
-      <div style={{ width: '100%', maxWidth: 780, maxHeight: '90vh', background: 'var(--ss-sheet)', borderRadius: '26px', border: '1px solid var(--ss-line)', boxShadow: 'var(--ss-shadow)', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'fadeIn 0.2s ease' }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="settings-modal-title" tabIndex={-1} style={{ width: '100%', maxWidth: 780, maxHeight: '90vh', background: 'var(--ss-sheet)', borderRadius: '26px', border: '1px solid var(--ss-line)', boxShadow: 'var(--ss-shadow)', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'fadeIn 0.2s ease', outline: 'none' }}>
         {/* Header */}
         <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--ss-line-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <div>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--ss-ink)', marginBottom: 2 }}>Settings</h2>
+            <h2 id="settings-modal-title" style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--ss-ink)', marginBottom: 2 }}>Settings</h2>
             <p style={{ fontSize: 13, color: 'var(--ss-ink3)' }}>Configure your Steam Dashboard</p>
           </div>
-          <button onClick={onClose} style={{ background: 'var(--ss-inset)', border: '1px solid var(--ss-line)', borderRadius: '14px', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 16, color: 'var(--ss-ink2)' }}
+          <button onClick={onClose} aria-label="Close settings" style={{ background: 'var(--ss-inset)', border: '1px solid var(--ss-line)', borderRadius: '14px', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 16, color: 'var(--ss-ink2)' }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--ss-btn-hi)'}
             onMouseLeave={e => e.currentTarget.style.background = 'var(--ss-inset)'}
           >✕</button>

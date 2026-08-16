@@ -40,6 +40,7 @@ h1,h2,h3,h4,.heading{font-family:var(--font-display);font-weight:600;line-height
 .progress-fill{height:100%;border-radius:99px;transition:width 0.8s cubic-bezier(0.4,0,0.2,1);}
 .input{width:100%;padding:10px 14px;background:var(--ss-inset);border:1px solid var(--ss-line);border-radius:14px;color:var(--ss-ink);font-family:var(--font-body);font-size:14px;outline:none;transition:border-color 0.15s,box-shadow 0.15s;}
 .input:focus{border-color:var(--ss-accent);box-shadow:0 0 0 3px var(--ss-pill-bg);}
+.btn:focus-visible,.ss-pill:focus-visible{outline:2px solid var(--ss-accent);outline-offset:2px;}
 .input::placeholder{color:var(--ss-ink3);}
 .divider{height:1px;background:var(--ss-line-soft);}
 .stat-number{font-family:var(--font-mono);font-weight:500;font-variant-numeric:tabular-nums;line-height:1;}
@@ -55,7 +56,7 @@ a:hover{color:var(--ss-accent-txt);}
    ============================================================ */
 :root, [data-theme="dark"] {
   --ss-bg: #06080c;
-  --ss-ink: #eef2f7; --ss-ink2: #aab3c2; --ss-ink3: #8b93a3; --ss-ink4: #6c7583;
+  --ss-ink: #eef2f7; --ss-ink2: #aab3c2; --ss-ink3: #8b93a3; --ss-ink4: #717a89;
   --ss-panel: linear-gradient(155deg,rgba(255,255,255,.085),rgba(255,255,255,.022));
   --ss-panel-hi: linear-gradient(155deg,rgba(255,255,255,.10),rgba(255,255,255,.03));
   --ss-soft: rgba(255,255,255,.05);
@@ -78,7 +79,7 @@ a:hover{color:var(--ss-accent-txt);}
 }
 [data-theme="light"] {
   --ss-bg: #eaeff6;
-  --ss-ink: #101827; --ss-ink2: #44526a; --ss-ink3: #68768c; --ss-ink4: #8c98aa;
+  --ss-ink: #101827; --ss-ink2: #44526a; --ss-ink3: #5c6980; --ss-ink4: #4d5972;
   --ss-panel: linear-gradient(155deg,rgba(255,255,255,.78),rgba(255,255,255,.44));
   --ss-panel-hi: linear-gradient(155deg,rgba(255,255,255,.9),rgba(255,255,255,.55));
   --ss-soft: rgba(255,255,255,.6);
@@ -101,7 +102,7 @@ a:hover{color:var(--ss-accent-txt);}
 }
 [data-theme="vapor"] {
   --ss-bg: #050710;
-  --ss-ink: #f2f6fb; --ss-ink2: #b6c0d0; --ss-ink3: #8e97a8; --ss-ink4: #6a7385;
+  --ss-ink: #f2f6fb; --ss-ink2: #b6c0d0; --ss-ink3: #8e97a8; --ss-ink4: #70798c;
   --ss-panel: linear-gradient(155deg,rgba(255,255,255,.045),rgba(255,255,255,.012));
   --ss-panel-hi: linear-gradient(155deg,rgba(255,255,255,.06),rgba(255,255,255,.016));
   --ss-soft: rgba(255,255,255,.03);

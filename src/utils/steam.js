@@ -259,6 +259,14 @@ const CONFIG_KEY = 'steam_dashboard_config';
 
 export function saveConfig(config) {
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  // Mirror to the persistent data folder (see server.js) so config isn't
+  // locked inside this one browser profile. Fire-and-forget — this must
+  // never block or fail the UI.
+  fetch('/api/user-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  }).catch(() => {});
 }
 
 export function loadConfig() {
@@ -266,6 +274,32 @@ export function loadConfig() {
     return JSON.parse(localStorage.getItem(CONFIG_KEY)) || {};
   } catch {
     return {};
+  }
+}
+
+// Pulls config back from the persistent data folder when localStorage is
+// empty (e.g. a cleared browser profile) and repopulates localStorage from
+// it. Used once at startup as a fallback — the normal path is loadConfig().
+export async function hydrateConfigFromServer() {
+  try {
+    const res = await fetch('/api/user-config');
+    if (!res.ok) return null;
+    const { appConfig } = await res.json();
+    if (appConfig?.apiKey && appConfig?.steamUrl) {
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(appConfig));
+      return appConfig;
+    }
+  } catch {}
+  return null;
+}
+
+// Clears the server-side mirrors alongside a localStorage reset, so a
+// "Reset App" doesn't get silently undone by hydrateConfigFromServer() on
+// the next launch.
+export async function clearServerMirrors(steamId) {
+  try { await fetch('/api/user-config', { method: 'DELETE' }); } catch {}
+  if (steamId) {
+    try { await fetch(`/api/snapshots/${steamId}`, { method: 'DELETE' }); } catch {}
   }
 }
 
@@ -291,6 +325,14 @@ export function saveSnapshot(steamId, games, recentGames) {
     const allSnapshots = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || '{}');
     allSnapshots[steamId] = trimmed;
     localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(allSnapshots));
+
+    // Mirror to the persistent data folder — see saveConfig()'s comment
+    // for why this exists alongside localStorage.
+    fetch(`/api/snapshots/${steamId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snapshots: trimmed }),
+    }).catch(() => {});
   } catch (e) {
     console.warn('Failed to save snapshot:', e);
   }

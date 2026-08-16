@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import useFocusTrap from '../hooks/useFocusTrap.js';
 
 const MARGIN = 12; // gap between the clicked card and the floating panel
 
@@ -10,6 +11,7 @@ const MARGIN = 12; // gap between the clicked card and the floating panel
 export default function DetailSheet({ open, onClose, anchorRect, width = 380, maxHeight = 560, children }) {
   const [pos, setPos] = useState(null);
   const panelRef = useRef(null);
+  useFocusTrap(open, panelRef);
 
   useEffect(() => {
     if (!open) return;
@@ -55,6 +57,8 @@ export default function DetailSheet({ open, onClose, anchorRect, width = 380, ma
       <div
         ref={panelRef}
         tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
         className="ss-panel"
         data-no-tilt
         style={{
