@@ -4,27 +4,25 @@ A personal gaming analytics dashboard powered by the Steam Web API, HowLongToBea
 
 ---
 
-## Download (Windows, no Node.js required)
+## Quick Start (Windows, no Node.js required)
 
-The fastest way to get running — no Node.js install, no `npm`, no terminal commands:
+You should already have downloaded and unzipped the latest release from **[Releases](../../releases/latest)** — if not, grab **Steam-Stats-vX.X.X-win64.zip** from there first and unzip it anywhere.
 
-**1.** Grab the latest zip from **[Releases](../../releases/latest)** and unzip it anywhere.
+**1.** Double-click **`Start Steam Stats.bat`**. A console window shows startup logs, and your browser opens automatically to the app.
 
-**2.** Double-click **`Start Steam Stats.bat`**. A console window shows startup logs, and your browser opens automatically to the app.
+**2.** Get a free Steam Web API key at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) (use `localhost` as the domain name), and set your Steam profile to **Public** — in Steam: **Profile → Edit Profile → Privacy Settings → Game details → Public**. The app can't read your library otherwise.
 
-**3.** Get a free Steam Web API key at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) (use `localhost` as the domain name), and set your Steam profile to **Public** — in Steam: **Profile → Edit Profile → Privacy Settings → Game details → Public**. The app can't read your library otherwise.
-
-**4.** Enter your API key and Steam profile URL when prompted (e.g. `https://steamcommunity.com/profiles/76561198044492736` or a vanity URL like `https://steamcommunity.com/id/yourname`).
+**3.** Enter your API key and Steam profile URL when prompted (e.g. `https://steamcommunity.com/profiles/76561198044492736` or a vanity URL like `https://steamcommunity.com/id/yourname`).
 
 Close the console window to stop the app; double-click the `.bat` again to relaunch.
 
 > **Windows will show a SmartScreen warning** ("Windows protected your PC") the first time you run it — expected for an unsigned free hobby project, not a sign of a problem. Click **"More info"** → **"Run anyway"**. Only appears once per machine.
 
-Prefer to run from source instead (for development, or if you don't trust an unsigned `.exe`)? See **Quick Start** below.
+Prefer to run from source instead (for development, or if you don't trust an unsigned `.exe`)? See **Running from Source** below.
 
 ---
 
-## Quick Start (running from source)
+## Running from Source
 
 **1. Install Node.js** — [nodejs.org](https://nodejs.org), LTS version. Run the installer (Next → Next → Finish).
 
