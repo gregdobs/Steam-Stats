@@ -4,6 +4,9 @@ All notable changes to this project are documented here. Format loosely follows 
 
 ## [Unreleased]
 
+### Fixed
+- Release artifacts are now named `Steam-Stats-Setup-<version>.exe` and `Steam-Stats-<version>-portable.exe`, pinned explicitly in `electron-builder.yml`. They previously derived from `productName`, which put a space in the filename — and GitHub silently rewrites spaces in release assets to dots, so the uploaded files came out as `Steam.Stats.Setup.1.2.0.exe` and no longer matched what the docs told people to download. (The v1.2.0 assets were renamed in place, so its download links are correct.) The display name is unchanged everywhere a user actually reads it; this only affects the file on disk.
+
 ## [1.2.0] - 2026-08-18
 
 Steam Stats becomes a real desktop app.

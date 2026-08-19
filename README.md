@@ -8,8 +8,8 @@ A personal gaming analytics dashboard powered by the Steam Web API, HowLongToBea
 
 Grab the latest build from **[Releases](../../releases/latest)**. Two options, both self-contained — there's nothing else to install:
 
-- **`Steam Stats Setup <version>.exe`** — installs it properly, with a Start-menu entry and desktop shortcut.
-- **`Steam Stats <version> portable.exe`** — a single file. Download, double-click, done. Nothing is installed.
+- **`Steam-Stats-Setup-<version>.exe`** — installs it properly, with a Start-menu entry and desktop shortcut.
+- **`Steam-Stats-<version>-portable.exe`** — a single file. Download, double-click, done. Nothing is installed.
 
 **1.** Run whichever you downloaded. Steam Stats opens in its own window.
 
@@ -98,9 +98,10 @@ the app's install directory:
 - macOS: `~/Library/Application Support/SteamStats`
 - Linux: `$XDG_DATA_HOME/SteamStats` or `~/.local/share/SteamStats`
 
-Because it lives outside the release folder, it's untouched when you update to a
-new release — just unzip the new version and keep using it. **Settings → Data &
-Cache → Open Folder** takes you straight there.
+Because it lives outside the app's install directory, it's untouched when you
+update — install the new version (or swap in the new portable `.exe`) and
+everything carries over. **Settings → Data & Cache → Open Folder** takes you
+straight there.
 
 App config and snapshot history are also mirrored into your browser's
 `localStorage` for fast reads; the data folder is the durable copy that survives
@@ -269,8 +270,8 @@ This builds the frontend, regenerates the third-party license notice, then runs 
 
 | Artifact | What it's for |
 |---|---|
-| `Steam Stats Setup <version>.exe` | Installer — Start-menu and desktop shortcuts, choose install location, clean uninstall. ~88MB. |
-| `Steam Stats <version> portable.exe` | Single self-contained file. Download and run, no install. ~88MB. |
+| `Steam-Stats-Setup-<version>.exe` | Installer — Start-menu and desktop shortcuts, choose install location, clean uninstall. ~88MB. |
+| `Steam-Stats-<version>-portable.exe` | Single self-contained file. Download and run, no install. ~88MB. |
 
 Either one is the whole app: Electron bundles Node, so there's nothing for the recipient to install.
 

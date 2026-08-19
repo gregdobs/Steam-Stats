@@ -10,8 +10,8 @@ A personal gaming analytics dashboard for your Steam library. It runs entirely o
 
 | File | Use this if… |
 |---|---|
-| **`Steam Stats Setup 1.2.0.exe`** | You want it installed properly — Start-menu entry, desktop shortcut, clean uninstall. |
-| **`Steam Stats 1.2.0 portable.exe`** | You just want to run it. One file, nothing installed, delete it when you're done. |
+| **`Steam-Stats-Setup-1.2.0.exe`** | You want it installed properly — Start-menu entry, desktop shortcut, clean uninstall. |
+| **`Steam-Stats-1.2.0-portable.exe`** | You just want to run it. One file, nothing installed, delete it when you're done. |
 
 Windows 10/11, 64-bit. Nothing else to install — Node.js is bundled.
 

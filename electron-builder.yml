@@ -52,7 +52,14 @@ win:
     # ...and a single self-contained .exe for download-and-run, no install.
     - portable
 
+# Artifact filenames are hyphenated rather than using ${productName}, which
+# would put a space in them. GitHub silently rewrites spaces in release asset
+# names to dots ("Steam Stats Setup 1.2.0.exe" was uploaded as
+# "Steam.Stats.Setup.1.2.0.exe"), so any docs naming the download go stale the
+# moment they're published. The display name stays "Steam Stats" everywhere a
+# user actually reads it — this is only the file on disk.
 nsis:
+  artifactName: Steam-Stats-Setup-${version}.exe
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
@@ -61,4 +68,4 @@ nsis:
   shortcutName: Steam Stats
 
 portable:
-  artifactName: Steam Stats ${version} portable.exe
+  artifactName: Steam-Stats-${version}-portable.exe
