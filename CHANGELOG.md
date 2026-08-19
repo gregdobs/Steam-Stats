@@ -5,6 +5,7 @@ All notable changes to this project are documented here. Format loosely follows 
 ## [Unreleased]
 
 ### Fixed
+- `npm run build:electron` now works when the project lives in an indexed or synced folder (Desktop, Documents, OneDrive), where it previously failed with `EPERM … rename 'release/win-unpacked.tmp' -> 'release/win-unpacked'`. Packaging is staged under the OS temp directory by `tools/build-app.mjs` and the finished installers are copied into `release/`. The rename is blocked by a directory-change-notification handle — the kind Search Indexer, Defender and sync clients take on newly created folders — which stops a directory being renamed while leaving its contents readable; copying files is unaffected. Fixed in the build rather than by asking anyone to add an antivirus or indexing exclusion.
 - Release artifacts are now named `Steam-Stats-Setup-<version>.exe` and `Steam-Stats-<version>-portable.exe`, pinned explicitly in `electron-builder.yml`. They previously derived from `productName`, which put a space in the filename — and GitHub silently rewrites spaces in release assets to dots, so the uploaded files came out as `Steam.Stats.Setup.1.2.0.exe` and no longer matched what the docs told people to download. (The v1.2.0 assets were renamed in place, so its download links are correct.) The display name is unchanged everywhere a user actually reads it; this only affects the file on disk.
 
 ## [1.2.0] - 2026-08-18

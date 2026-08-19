@@ -17,7 +17,7 @@
     "preview": "vite preview",
     "start": "concurrently \"npm run server\" \"vite --port 5173\"",
     "dev:electron": "concurrently \"vite --port 5173\" \"electron . --dev\"",
-    "build:electron": "npm run build && node tools/generate-licenses.mjs && electron-builder",
+    "build:electron": "npm run build && node tools/generate-licenses.mjs && node tools/build-app.mjs",
     "build:licenses": "node tools/generate-licenses.mjs",
     "build:icons": "node tools/generate-icons.mjs",
     "test": "vitest run"

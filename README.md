@@ -277,15 +277,13 @@ Either one is the whole app: Electron bundles Node, so there's nothing for the r
 
 **Windows will show a SmartScreen warning ("Windows protected your PC")** on first run. The executable isn't code-signed (a certificate costs money and this is a free hobby project), so Windows doesn't recognize the publisher yet. Click **"More info"** → **"Run anyway"**. This is realistically the single largest bit of onboarding friction the app has — much more than download size — so code signing is the highest-leverage improvement if that ever matters.
 
-### If the build fails with `EPERM … rename win-unpacked.tmp`
+### Why the build stages through a temp folder
 
-On some machines electron-builder can't rename its staging directory when the project lives under `Desktop`. This isn't a config problem — no user-mode process holds the handle and the file permissions are normal; a kernel-level filter (most likely Windows Defender scanning the freshly written executables) is holding it. Two fixes:
+`build:electron` runs electron-builder with its output under your OS temp directory, then copies the finished installers into `release/`. That's deliberate.
 
-- **Build to a temp directory** — no settings changed:
-  ```
-  npx electron-builder -c.directories.output=%TEMP%/steam-stats-release
-  ```
-- **Or add a Defender exclusion** for the project folder (Windows Security → Virus & threat protection → Exclusions). That's a security setting, so decide for yourself whether it's worth it.
+electron-builder extracts the Electron runtime to `win-unpacked.tmp` and renames it to `win-unpacked`. On Windows that rename fails with `EPERM` whenever something holds a directory-change-notification handle on the new folder — which Search Indexer, Defender and file-sync clients all do for indexed locations like Desktop, Documents and OneDrive folders. Since this project is likely to live in exactly such a folder, the build stages somewhere unwatched instead of asking you to weaken an antivirus or indexing setting.
+
+Copying the finished files back is unaffected, so `release/` ends up with the same artifacts either way. The unpacked app stays in the staging folder for debugging; the build prints its path at the end.
 
 ---
 
