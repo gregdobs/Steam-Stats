@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Steam Stats</title>
+  <style>
+    /* Self-contained on purpose: this window is shown before the local server
+       is up, so it can't load anything over HTTP. Colours are hard-coded to
+       match the app's dark theme (--ss-bg / --ss-accent) rather than pulling
+       in index.css, which isn't reachable yet either. */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      background: #06080c;
+      color: #e8edf5;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+      cursor: default;
+    }
+    body {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 22px;
+      /* Matches the installed-app icon's diagonal field. */
+      background: linear-gradient(150deg, #101a29, #06080c);
+      border: 1px solid rgba(111, 200, 247, 0.14);
+      border-radius: 12px;
+    }
+    .bars { display: flex; align-items: flex-end; gap: 7px; height: 46px; }
+    .bars i {
+      display: block; width: 13px; border-radius: 4px;
+      background: #6fc8f7;
+      animation: pulse 1.15s ease-in-out infinite;
+    }
+    /* Three ascending bars — the app icon, animated. */
+    .bars i:nth-child(1) { height: 40%; opacity: 0.45; animation-delay: 0s; }
+    .bars i:nth-child(2) { height: 68%; opacity: 0.72; animation-delay: 0.14s; }
+    .bars i:nth-child(3) { height: 100%; opacity: 1;    animation-delay: 0.28s; }
+    @keyframes pulse {
+      0%, 100% { transform: scaleY(0.72); }
+      50%      { transform: scaleY(1); }
+    }
+    .bars i { transform-origin: bottom; }
+    .name { font-size: 17px; font-weight: 600; letter-spacing: 0.2px; }
+    .status { font-size: 12.5px; color: #8b97a8; min-height: 17px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .bars i { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bars" role="img" aria-label="Loading"><i></i><i></i><i></i></div>
+  <div class="name">Steam Stats</div>
+  <div class="status" id="status">Starting…</div>
+
+  <script>
+    // The main process pushes progress text in via executeJavaScript so the
+    // wait is explained rather than just spinning.
+    window.setStatus = (text) => {
+      const el = document.getElementById('status');
+      if (el) el.textContent = text;
+    };
+  </script>
+</body>
+</html>

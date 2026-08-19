@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
-import { formatHours, minutesToHours, getGameHeaderUrl, loadSnapshots, fetchGenres } from '../utils/steam.js';
+import { formatHours, minutesToHours, getGameHeaderUrl, getGameHeroUrl, loadSnapshots, fetchGenres } from '../utils/steam.js';
 import useFocusTrap from '../hooks/useFocusTrap.js';
 
 const PERIODS = [
@@ -149,7 +149,7 @@ export default function ShareCard({ onClose }) {
 
     // Hero backdrop from top game, dimmed and faded
     if (stats.topGames[0]) {
-      const heroImg = await loadImage(`https://cdn.akamai.steamstatic.com/steam/apps/${stats.topGames[0].appid}/library_hero.jpg`);
+      const heroImg = await loadImage(getGameHeroUrl(stats.topGames[0].appid));
       if (heroImg) {
         ctx.save();
         ctx.globalAlpha = 0.22;

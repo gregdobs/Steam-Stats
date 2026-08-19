@@ -37,6 +37,45 @@ const DEV_URL = 'http://localhost:5173';
 const HEALTH_URL = `http://localhost:${PORT}/api/health`;
 
 let mainWindow = null;
+let splashWindow = null;
+
+// Shown immediately so startup isn't a blank pause. It matters most for the
+// portable build, which self-extracts ~88MB before any of our code runs, and
+// then still has to boot the Express server (cache loads, HLTB token) before
+// the UI has anything to render.
+function createSplash() {
+  splashWindow = new BrowserWindow({
+    width: 300,
+    height: 220,
+    frame: false,
+    resizable: false,
+    center: true,
+    show: false,
+    backgroundColor: '#06080c',
+    // Deliberately not alwaysOnTop: this can sit for a few seconds, and a
+    // small frameless window that refuses to go behind anything is obnoxious
+    // if the user alt-tabs away while waiting.
+    skipTaskbar: false,
+    title: 'Steam Stats',
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
+  });
+  splashWindow.loadFile(path.join(__dirname, 'splash.html'));
+  splashWindow.once('ready-to-show', () => splashWindow?.show());
+  splashWindow.on('closed', () => { splashWindow = null; });
+}
+
+/** Push a progress line into the splash, if it's still open. */
+function splashStatus(text) {
+  if (!splashWindow || splashWindow.isDestroyed()) return;
+  splashWindow.webContents
+    .executeJavaScript(`window.setStatus && window.setStatus(${JSON.stringify(text)})`)
+    .catch(() => {});
+}
+
+function closeSplash() {
+  if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
+  splashWindow = null;
+}
 
 // Two instances would both try to bind port 3001 and the second would fail
 // with EADDRINUSE, leaving a dead window. Focus the existing one instead.
@@ -97,13 +136,22 @@ function createWindow() {
     },
   });
 
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  // Swap splash → app in one step, so there's never a moment with neither
+  // window on screen (which reads as the app having died).
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    closeSplash();
+  });
   mainWindow.on('closed', () => { mainWindow = null; });
 
   // Without this, a failed load is an indistinguishable blank window. Since
   // the app has exactly one window, a silent failure here is total.
   mainWindow.webContents.on('did-fail-load', (_event, code, description, url) => {
     console.error(`❌ Window failed to load ${url} — ${description} (${code})`);
+    // Otherwise ready-to-show never fires and the splash spins forever with
+    // no window behind it.
+    closeSplash();
+    mainWindow?.show();
   });
 
   // The UI links out to the Steam store and to Steam's API-key page. Those
@@ -133,11 +181,17 @@ app.whenReady().then(async () => {
   // explicitly means the packaged layout can move without editing server.js.
   process.env.STEAM_STATS_DIST = path.join(ROOT, 'dist');
 
+  createSplash();
+
   try {
+    splashStatus('Starting local server…');
     // Importing server.js starts it — it calls app.listen() at module scope.
     await import('../server.js');
+    splashStatus('Waiting for server…');
     await waitForServer();
+    splashStatus('Loading your library…');
   } catch (err) {
+    closeSplash();
     dialog.showErrorBox(
       'Steam Stats could not start',
       `The local server failed to start.\n\n${err?.message || err}\n\n` +

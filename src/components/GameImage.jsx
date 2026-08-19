@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getGameCapsuleFallbacks, getGameHeaderUrl, fetchArtworkFallback } from '../utils/steam.js';
+import { getGameCapsuleFallbacks, getGameHeaderUrl, getGameHeroUrl, fetchArtworkFallback } from '../utils/steam.js';
 
 // Tries each URL in sequence until one loads, falling back through all known
 // Steam CDN formats. Some newer titles' assets have moved to a per-asset-hash
@@ -150,13 +150,13 @@ export function GameHeader({ appId, name, style = {} }) {
 
 // Hero image (1920x620) with header fallback
 export function GameHero({ appId, name, style = {} }) {
-  const [src, setSrc] = useState(`https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_hero.jpg`);
+  const [src, setSrc] = useState(getGameHeroUrl(appId));
   const [loaded, setLoaded] = useState(false);
   const [triedFallback, setTriedFallback] = useState(false);
   const [triedExtra, setTriedExtra] = useState(false);
 
   useEffect(() => {
-    setSrc(`https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_hero.jpg`);
+    setSrc(getGameHeroUrl(appId));
     setLoaded(false);
     setTriedFallback(false);
     setTriedExtra(false);

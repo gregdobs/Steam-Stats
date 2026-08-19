@@ -137,33 +137,56 @@ export async function fetchArtworkFallback(appId) {
   }
 }
 
-// Game art URLs — Steam CDN has multiple formats; not all games have all assets
+// ── Game art URLs ─────────────────────────────────────────────
+// Steam fronts the same assets from three interchangeable edge providers.
+// Ordered current-first: cdn.akamai is the legacy endpoint and is the one most
+// likely to be unreachable on a given network, so it's the last resort rather
+// than the default it used to be.
+//
+// Rotating hosts matters more than it looks. The capsule fallback list below
+// used to be five paths on cdn.akamai alone — which is path redundancy, not
+// host redundancy. If that single host failed to resolve, every fallback
+// failed the same way and *every* game in the library rendered the placeholder
+// tile at once, which is exactly how this surfaced.
+export const STEAM_CDN_HOSTS = [
+  'https://cdn.cloudflare.steamstatic.com',
+  'https://cdn.fastly.steamstatic.com',
+  'https://cdn.akamai.steamstatic.com',
+];
+
+const PRIMARY_CDN = STEAM_CDN_HOSTS[0];
+
 export function getGameHeaderUrl(appId) {
-  return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
+  return `${PRIMARY_CDN}/steam/apps/${appId}/header.jpg`;
 }
 
 export function getGameCapsuleUrl(appId) {
-  // library_600x900 is the tall capsule — many games don't have it
-  // We return an array of fallbacks to try in order
-  return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`;
+  // library_600x900 is the tall capsule — many games don't have it.
+  // See getGameCapsuleFallbacks for the full try-in-order list.
+  return `${PRIMARY_CDN}/steam/apps/${appId}/library_600x900.jpg`;
 }
 
 export function getGameCapsuleFallbacks(appId) {
+  const path = (p) => `/steam/apps/${appId}/${p}`;
+  // Host is varied before shape is: a host outage takes out every asset for
+  // every game, whereas a missing library_600x900 only affects one title. So
+  // try the preferred portrait capsule on all three hosts first, then degrade
+  // to the landscape shapes (which almost every game has) across hosts too.
   return [
-    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`,
-    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`,
-    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/capsule_616x353.jpg`,
-    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/capsule_467x181.jpg`,
-    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
+    ...STEAM_CDN_HOSTS.map((h) => h + path('library_600x900.jpg')),
+    `${PRIMARY_CDN}${path('library_600x900_2x.jpg')}`,
+    ...STEAM_CDN_HOSTS.map((h) => h + path('header.jpg')),
+    `${PRIMARY_CDN}${path('capsule_616x353.jpg')}`,
+    `${PRIMARY_CDN}${path('capsule_467x181.jpg')}`,
   ];
 }
 
 export function getGameHeroUrl(appId) {
-  return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_hero.jpg`;
+  return `${PRIMARY_CDN}/steam/apps/${appId}/library_hero.jpg`;
 }
 
 export function getGameLogoUrl(appId) {
-  return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/logo.png`;
+  return `${PRIMARY_CDN}/steam/apps/${appId}/logo.png`;
 }
 
 // Formatting helpers

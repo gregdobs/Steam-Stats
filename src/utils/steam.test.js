@@ -6,6 +6,7 @@ import {
   getUnplayedCountSeries, computeDormantLongest,
   saveSnapshot,
   shouldUseSteamApp, steamStoreUrl,
+  getGameCapsuleFallbacks, STEAM_CDN_HOSTS,
   loadSteamLinkPref, saveSteamLinkPref, STEAM_LINK_PREF_KEY,
 } from './steam.js';
 
@@ -326,5 +327,39 @@ describe('Steam link routing', () => {
       localStorage.setItem(STEAM_LINK_PREF_KEY, 'not json');
       expect(loadSteamLinkPref()).toBeUndefined();
     });
+  });
+});
+
+describe('Steam CDN art fallbacks', () => {
+  it('spreads the preferred capsule across every CDN host before changing shape', () => {
+    const urls = getGameCapsuleFallbacks(1245620);
+    const first3 = urls.slice(0, 3);
+    // A host outage kills every asset for every game, so host is varied first.
+    expect(first3.every((u) => u.endsWith('/library_600x900.jpg'))).toBe(true);
+    expect(new Set(first3.map((u) => new URL(u).host)).size).toBe(3);
+  });
+
+  it('does not put every fallback on a single host', () => {
+    // The original bug: five paths on cdn.akamai alone, so one unreachable
+    // host made every game in the library render the placeholder tile.
+    const urls = getGameCapsuleFallbacks(570);
+    const hosts = new Set(urls.map((u) => new URL(u).host));
+    expect(hosts.size).toBeGreaterThan(1);
+  });
+
+  it('prefers a current CDN host over the legacy akamai endpoint', () => {
+    const urls = getGameCapsuleFallbacks(570);
+    expect(new URL(urls[0]).host).not.toBe('cdn.akamai.steamstatic.com');
+    expect(STEAM_CDN_HOSTS[0]).toBe('https://cdn.cloudflare.steamstatic.com');
+  });
+
+  it('includes the widely-available header.jpg as a shape fallback', () => {
+    const urls = getGameCapsuleFallbacks(570);
+    expect(urls.some((u) => u.endsWith('/header.jpg'))).toBe(true);
+  });
+
+  it('builds every URL against the requested appid', () => {
+    const urls = getGameCapsuleFallbacks(99999);
+    expect(urls.every((u) => u.includes('/steam/apps/99999/'))).toBe(true);
   });
 });
