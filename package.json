@@ -1,7 +1,7 @@
 {
   "name": "steam-dashboard",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "A personal gaming analytics dashboard powered by the Steam Web API, HowLongToBeat, and your local Steam installation.",
   "author": "Greg",
   "license": "MIT",
@@ -22,7 +22,7 @@
     "build:icons": "node tools/generate-icons.mjs",
     "test": "vitest run"
   },
-  "_dependencyNote": "Only packages the SERVER needs at runtime belong in dependencies — electron-builder ships exactly that set (and its transitive tree) into the packaged app. react/react-dom are compiled into dist/ by Vite and are never required at runtime, and concurrently only drives the dev scripts, so both live in devDependencies. Listing them as dependencies dragged ~27MB of yargs/chalk/babel into the build.",
+  "_dependencyNote": "Only packages the SERVER needs at runtime belong in dependencies \u2014 electron-builder ships exactly that set (and its transitive tree) into the packaged app. react/react-dom are compiled into dist/ by Vite and are never required at runtime, and concurrently only drives the dev scripts, so both live in devDependencies. Listing them as dependencies dragged ~27MB of yargs/chalk/babel into the build.",
   "dependencies": {
     "axios": "^1.7.2",
     "cors": "^2.8.5",

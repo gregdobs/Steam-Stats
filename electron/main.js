@@ -16,7 +16,7 @@
 // still installable as a PWA) for anyone who prefers that.
 // ─────────────────────────────────────────────
 
-import { app, BrowserWindow, shell, dialog } from 'electron';
+import { app, BrowserWindow, shell, dialog, session } from 'electron';
 import path from 'path';
 import http from 'http';
 import { fileURLToPath } from 'url';
@@ -182,6 +182,21 @@ app.whenReady().then(async () => {
   process.env.STEAM_STATS_DIST = path.join(ROOT, 'dist');
 
   createSplash();
+
+  // The desktop app never wants a service worker, and one shipped in 1.2.0
+  // that broke every image by re-issuing cross-origin requests as fetch()
+  // (blocked by connect-src). Simply not registering one is NOT enough to
+  // undo that: an already-installed worker keeps controlling the page, and
+  // calling unregister() from the renderer only takes effect once every
+  // client has closed — so the first launch after the fix would still be
+  // broken. Clearing it at the session level happens before anything loads,
+  // so the window is guaranteed to come up uncontrolled every time.
+  try {
+    await session.defaultSession.clearStorageData({ storages: ['serviceworkers'] });
+  } catch {
+    // Non-fatal: worst case a stale worker survives and images stay broken,
+    // which is no worse than not trying.
+  }
 
   try {
     splashStatus('Starting local server…');

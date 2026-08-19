@@ -40,7 +40,24 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Straight to the network, always. Non-GET and range requests are passed
-  // through untouched by the same path.
+  // CRITICAL: cross-origin requests must fall through untouched.
+  //
+  // Calling event.respondWith(fetch(request)) unconditionally — which this
+  // file used to do — re-issues *every* request as a fetch() from the worker.
+  // A fetch() is governed by connect-src, not by the directive that matches
+  // the original request type. connect-src here is 'self', so every
+  // cross-origin <img> load (which img-src explicitly permits) was rewritten
+  // into a connection the CSP forbids:
+  //
+  //   Fetch API cannot load https://cdn.../header.jpg.
+  //   Refused to connect because it violates the document's CSP.  at sw.js
+  //
+  // That silently blocked all Steam game artwork and the profile avatar. The
+  // worker exists only to make the page installable; it has no business
+  // touching requests it isn't going to do anything with.
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+
+  // Same-origin only, still a plain network passthrough with no caching.
   event.respondWith(fetch(event.request));
 });
