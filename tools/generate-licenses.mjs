@@ -63,6 +63,24 @@ try {
   entries.push({ name: 'electron', version: electronPkg.version, license: electronPkg.license || 'MIT' });
 } catch {}
 
+// Webfonts in public/fonts/ are redistributed inside the app, so the OFL's
+// attribution requirement applies to them exactly as the npm licenses do.
+// Listed only when the files are actually present, so removing them from the
+// build also removes the claim that they ship.
+const FONT_DIR = path.join(ROOT, 'public', 'fonts');
+const BUNDLED_FONTS = [
+  { name: 'DM Sans (webfont)', match: 'dm-sans', license: 'OFL-1.1' },
+  { name: 'DM Mono (webfont)', match: 'dm-mono', license: 'OFL-1.1' },
+];
+try {
+  const present = fs.readdirSync(FONT_DIR);
+  for (const font of BUNDLED_FONTS) {
+    if (present.some((f) => f.startsWith(font.match))) {
+      entries.push({ name: font.name, version: '', license: font.license });
+    }
+  }
+} catch {}
+
 const merged = new Map();
 for (const e of entries) merged.set(e.name, e);
 const sorted = [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -78,7 +96,7 @@ const lines = [
   'Electron additionally bundles Chromium and Node.js; see Electron\'s own',
   'LICENSE and LICENSES.chromium.html, included in this installation.',
   '',
-  ...sorted.map((e) => `  ${e.name}@${e.version} — ${e.license}`),
+  ...sorted.map((e) => `  ${e.version ? `${e.name}@${e.version}` : e.name} — ${e.license}`),
   '',
 ];
 
