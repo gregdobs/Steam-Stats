@@ -5,6 +5,8 @@ import {
   computeLibraryDerivedStats,
   getUnplayedCountSeries, computeDormantLongest,
   saveSnapshot,
+  shouldUseSteamApp, steamStoreUrl,
+  loadSteamLinkPref, saveSteamLinkPref, STEAM_LINK_PREF_KEY,
 } from './steam.js';
 
 // The Vitest default (node) environment has no localStorage global, which
@@ -258,5 +260,71 @@ describe('computeYearlyUnlocks', () => {
     const result = computeYearlyUnlocks(achCache, [{ appid: 1, name: 'Solo' }]);
     expect(result[0].segments).toHaveLength(1);
     expect(result[0].segments[0].name).toBe('Solo');
+  });
+});
+
+describe('Steam link routing', () => {
+  beforeEach(() => {
+    localStorage.removeItem(STEAM_LINK_PREF_KEY);
+  });
+
+  describe('shouldUseSteamApp', () => {
+    it('follows detection when no explicit preference is stored', () => {
+      expect(shouldUseSteamApp(undefined, true)).toBe(true);
+      expect(shouldUseSteamApp(undefined, false)).toBe(false);
+    });
+
+    it('lets an explicit preference override detection in both directions', () => {
+      // Opted out despite Steam being installed.
+      expect(shouldUseSteamApp(false, true)).toBe(false);
+      // Opted in even though detection failed — Steam registers the protocol
+      // handler at install time, so this can legitimately still work.
+      expect(shouldUseSteamApp(true, false)).toBe(true);
+    });
+
+    it('treats a missing localConfig as not found rather than throwing', () => {
+      expect(shouldUseSteamApp(undefined, undefined)).toBe(false);
+      expect(shouldUseSteamApp(undefined, null)).toBe(false);
+    });
+  });
+
+  describe('steamStoreUrl', () => {
+    it('builds a steam:// protocol URL when routing to the desktop client', () => {
+      expect(steamStoreUrl(570, true)).toBe('steam://store/570');
+    });
+
+    it('builds a web store URL otherwise', () => {
+      expect(steamStoreUrl(570, false)).toBe('https://store.steampowered.com/app/570');
+    });
+
+    it('accepts numeric strings, since appids arrive as object keys', () => {
+      expect(steamStoreUrl('440', true)).toBe('steam://store/440');
+    });
+
+    it('returns null for non-numeric appids instead of building a protocol URL', () => {
+      // This value would otherwise be handed to the OS URL handler.
+      expect(steamStoreUrl('570/../../evil', true)).toBeNull();
+      expect(steamStoreUrl(undefined, true)).toBeNull();
+      expect(steamStoreUrl(null, false)).toBeNull();
+      expect(steamStoreUrl('', true)).toBeNull();
+    });
+  });
+
+  describe('preference persistence', () => {
+    it('reports undefined (auto) when nothing has been saved', () => {
+      expect(loadSteamLinkPref()).toBeUndefined();
+    });
+
+    it('round-trips an explicit choice, keeping false distinct from unset', () => {
+      saveSteamLinkPref(false);
+      expect(loadSteamLinkPref()).toBe(false);
+      saveSteamLinkPref(true);
+      expect(loadSteamLinkPref()).toBe(true);
+    });
+
+    it('falls back to auto when the stored value is corrupt', () => {
+      localStorage.setItem(STEAM_LINK_PREF_KEY, 'not json');
+      expect(loadSteamLinkPref()).toBeUndefined();
+    });
   });
 });

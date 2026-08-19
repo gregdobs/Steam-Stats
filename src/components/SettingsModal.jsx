@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp, HLTB_CACHE_KEY, ACH_CACHE_KEY } from '../hooks/useAppContext.jsx';
-import { saveConfig, formatHours, formatLastPlayed, clearServerMirrors } from '../utils/steam.js';
+import { saveConfig, formatHours, formatLastPlayed, clearServerMirrors,
+  loadSteamLinkPref, saveSteamLinkPref, shouldUseSteamApp } from '../utils/steam.js';
 import useFocusTrap from '../hooks/useFocusTrap.js';
 import { GameHeader } from './GameImage.jsx';
 import GameDetailPanel from './GameDetailPanel.jsx';
@@ -8,17 +9,19 @@ import { loadFeatureFlags, saveFeatureFlags } from './Navbar.jsx';
 import { THEMES, BLUR_STEPS } from '../utils/themes.js';
 
 // ── Toggle switch ──────────────────────────────────────────
-function ToggleSwitch({ on, onChange }) {
+function ToggleSwitch({ on, onChange, disabled }) {
   return (
     <button
       onClick={onChange}
       aria-checked={on}
       role="switch"
+      disabled={disabled}
       style={{
         width: 40, height: 22, borderRadius: 99, padding: 2,
-        border: 'none', cursor: 'pointer', transition: 'background 0.2s',
+        border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', transition: 'background 0.2s',
         background: on ? 'var(--ss-accent)' : 'var(--ss-hi)',
         position: 'relative', flexShrink: 0,
+        opacity: disabled ? 0.45 : 1,
       }}
     >
       <div style={{
@@ -405,6 +408,20 @@ function LocalSteamSettings() {
   const { localConfig, ownedGames } = useApp();
   const [customPath, setCustomPath]   = useState('');
   const [testResult, setTestResult]   = useState(null);
+  // Seeded from the resolved tri-state so the switch shows what links will
+  // actually do today, not a raw stored value that may still be "auto".
+  const [openLinksInSteam, setOpenLinksInSteam] = useState(
+    () => shouldUseSteamApp(loadSteamLinkPref(), localConfig?.found)
+  );
+
+  // localConfig arrives asynchronously, so this modal can mount before
+  // detection has answered. Re-resolve when it lands — but only while the
+  // preference is still "auto", so an explicit choice is never clobbered.
+  useEffect(() => {
+    if (loadSteamLinkPref() === undefined) {
+      setOpenLinksInSteam(!!localConfig?.found);
+    }
+  }, [localConfig?.found]);
   const [testing, setTesting]         = useState(false);
   const [applying, setApplying]       = useState(false);
   const [applied, setApplied]         = useState(false);
@@ -459,6 +476,23 @@ function LocalSteamSettings() {
       <Section title="Local Steam Installation">
         <Row label="Detection Status" description="Automatically detects common Steam installation paths.">
           <StatusDot ok={localConfig?.found} label={localConfig?.found ? 'Found' : 'Not Found'} />
+        </Row>
+
+        <Row
+          label="Open Steam Links in the Steam App"
+          description={localConfig?.found
+            ? 'Store links open in the Steam desktop client instead of your browser. Turn off to use the web store.'
+            : "Steam wasn't detected on this PC, so store links open in your browser. Set a Steam path above to enable this."}
+        >
+          <ToggleSwitch
+            on={openLinksInSteam}
+            disabled={!localConfig?.found}
+            onChange={() => {
+              const next = !openLinksInSteam;
+              setOpenLinksInSteam(next);
+              saveSteamLinkPref(next);
+            }}
+          />
         </Row>
 
         {/* Steam Path — always shown, editable */}

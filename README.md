@@ -6,15 +6,18 @@ A personal gaming analytics dashboard powered by the Steam Web API, HowLongToBea
 
 ## Quick Start (Windows, no Node.js required)
 
-You should already have downloaded and unzipped the latest release from **[Releases](../../releases/latest)** — if not, grab **Steam-Stats-vX.X.X-win64.zip** from there first and unzip it anywhere.
+Grab the latest build from **[Releases](../../releases/latest)**. Two options, both self-contained — there's nothing else to install:
 
-**1.** Double-click **`Start Steam Stats.bat`**. A console window shows startup logs, and your browser opens automatically to the app.
+- **`Steam Stats Setup <version>.exe`** — installs it properly, with a Start-menu entry and desktop shortcut.
+- **`Steam Stats <version> portable.exe`** — a single file. Download, double-click, done. Nothing is installed.
+
+**1.** Run whichever you downloaded. Steam Stats opens in its own window.
 
 **2.** Get a free Steam Web API key at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) (use `localhost` as the domain name), and set your Steam profile to **Public** — in Steam: **Profile → Edit Profile → Privacy Settings → Game details → Public**. The app can't read your library otherwise.
 
 **3.** Enter your API key and Steam profile URL when prompted (e.g. `https://steamcommunity.com/profiles/76561198044492736` or a vanity URL like `https://steamcommunity.com/id/yourname`).
 
-Close the console window to stop the app; double-click the `.bat` again to relaunch.
+Close the window to quit.
 
 > **Windows will show a SmartScreen warning** ("Windows protected your PC") the first time you run it — expected for an unsigned free hobby project, not a sign of a problem. Click **"More info"** → **"Run anyway"**. Only appears once per machine.
 
@@ -69,11 +72,19 @@ One page spanning your whole library, from untouched to overplayed:
 Click your **profile name** in the top-right corner to open Settings:
 
 - **Steam Connection** — change API key or profile URL
-- **Local Steam Path** — detected path, library folders, and a manual override if auto-detection misses your install
+- **Local Steam Path** — detected path, library folders, a manual override if auto-detection misses your install, and **Open Steam Links in the Steam App** (see below)
 - **HowLongToBeat** — integration status and a test lookup
 - **Display** — light/dark mode, plus **Feature Flags** for the experimental 7-Day and 30-Day dashboard periods (these use local snapshot data, so accuracy improves the longer you've had the app running — they're opt-in rather than on by default for that reason)
 - **Data & Cache** — data folder location, snapshot count, clear snapshots, or reset the app entirely
 - **Debug Info** — copy status info when reporting issues
+
+### Open Steam Links in the Steam App
+
+When Steam is detected on your PC, "View in Steam" on a game opens its store page **in the Steam desktop client** rather than a browser tab — the client is already running, and the store page there can actually install the game.
+
+This follows detection automatically: on if Steam was found, off if it wasn't. Flip the toggle in **Settings → Local Steam Path** to force it either way; your choice sticks and won't be overridden by detection afterward.
+
+The Steam API key link during setup deliberately stays in your normal browser — it's a logged-in account page, and that's where your session and password manager live.
 
 ---
 
@@ -133,7 +144,7 @@ None of this is required — the app works fully off the Steam Web API alone, lo
 
 **HowLongToBeat shows no data** — HLTB occasionally blocks automated requests. Try:
 1. Open [howlongtobeat.com](https://howlongtobeat.com) in your browser first
-2. Restart the app (close the console window, then double-click `Start Steam Stats.bat` again)
+2. Restart Steam Stats (close the window, then launch it again)
 3. Check **Settings → HowLongToBeat → Test** for details
 
 **Genre data is slow to fill in** — genres are fetched from the Steam Store API one at a time with a short delay between requests to avoid rate limits, so a big library can take a few minutes to fully populate on first load. It's cached after that.
@@ -187,6 +198,12 @@ That's the whole loop day-to-day: `npm run dev`, use the app, `Ctrl+C` when done
 
 > `steamstats.localhost` is a real, working address, not a typo to fix — every modern browser resolves any `*.localhost` hostname straight to your own machine, no setup required. Plain `http://localhost:5173` opens the exact same app if you'd rather use that.
 
+**Developing against the desktop shell instead:**
+```
+npm run dev:electron
+```
+This starts Vite and opens the Electron window pointed at it, so hot reload still works while you're seeing the real app window. Plain `npm run dev` stays the faster loop for pure UI work — the app runs identically in a browser, which is the whole reason the Express server wasn't replaced with IPC.
+
 ---
 
 ### Alternate: running the server and frontend separately
@@ -223,7 +240,7 @@ Then open `http://steamstats.localhost:5173` as before. Each window needs Ctrl+C
 | http://steamstats.localhost:5173 | The dashboard — open this in your browser |
 | http://steamstats.localhost:3001 | API server — you never need to open this directly |
 
-Both are equally reachable as plain `http://localhost:5173` / `:3001` — `steamstats.localhost` is just the friendlier name the app itself uses (auto-opened by the packaged `.exe`, printed by the server on startup).
+Both are equally reachable as plain `http://localhost:5173` / `:3001` — `steamstats.localhost` is just the friendlier name the app itself uses (loaded by the packaged app's window, printed by the server on startup).
 
 ---
 
@@ -236,37 +253,38 @@ npm test
 
 ---
 
-## Building a Distributable .exe
-
-Package the whole app into a folder anyone can run by double-clicking — no Node.js install required on their end.
+## Building a Distributable App
 
 **One-time setup** (already done if you cloned this repo):
 ```
 npm install
 ```
 
-**Build the release:**
+**Build:**
 ```
-npm run build:release
+npm run build:electron
 ```
 
-This runs everything automatically:
-1. Builds the frontend (`npm run build`)
-2. Compiles `bootstrap.cjs` into `Steam Stats.exe` via pkg
-3. Downloads a standalone `node.exe` to bundle alongside it (needed so the packaged app doesn't try to relaunch itself — only happens once, cached afterward)
-4. Copies `server.js` and the built frontend alongside it
-5. Installs a minimal, server-only `node_modules` — just `express`, `cors`, `helmet`, and `axios`, not the full frontend dev dependency tree
-6. Writes the launcher and a `README.txt` for whoever you send it to
+This builds the frontend, regenerates the third-party license notice, then runs `electron-builder` (config in `electron-builder.yml`). Two artifacts land in `release/`:
 
-Output lands in `release/`. Zip that whole folder — that's the distributable.
+| Artifact | What it's for |
+|---|---|
+| `Steam Stats Setup <version>.exe` | Installer — Start-menu and desktop shortcuts, choose install location, clean uninstall. ~88MB. |
+| `Steam Stats <version> portable.exe` | Single self-contained file. Download and run, no install. ~88MB. |
 
-**Running it:** double-click **`Start Steam Stats.bat`** — a console window shows startup logs, and a browser tab opens automatically once the server is ready. Close the console window to stop the app.
+Either one is the whole app: Electron bundles Node, so there's nothing for the recipient to install.
 
-**Windows will show a SmartScreen warning ("Windows protected your PC")** the first time anyone runs `Steam Stats.exe` — this is expected and not a sign of a problem. The executable isn't code-signed (a signing certificate costs money and this is a free hobby project), so Windows doesn't yet recognize it as coming from a known publisher. To run it anyway: click **"More info"**, then **"Run anyway"**. This is the same warning any small unsigned indie tool shows on first run; it only appears once per machine.
+**Windows will show a SmartScreen warning ("Windows protected your PC")** on first run. The executable isn't code-signed (a certificate costs money and this is a free hobby project), so Windows doesn't recognize the publisher yet. Click **"More info"** → **"Run anyway"**. This is realistically the single largest bit of onboarding friction the app has — much more than download size — so code signing is the highest-leverage improvement if that ever matters.
 
-**Why not a single file?** pkg's executable alone can't reliably include `node_modules` (native bindings, dynamic requires, and file-size bloat make that fragile). Shipping `server.js` + `dist/` + a minimal `node_modules` alongside a small bootstrap `.exe` is the standard, reliable pattern — the folder is still just one download, one zip, one double-click for whoever you send it to.
+### If the build fails with `EPERM … rename win-unpacked.tmp`
 
-**First build note:** the very first time you run `build:release`, pkg downloads a prebuilt Node.js binary (~40–80MB) to embed in the executable, and the script separately downloads a standalone `node.exe` for the release folder. Both need normal internet access and only happen once — pkg's download is cached in `~/.pkg-cache` afterward.
+On some machines electron-builder can't rename its staging directory when the project lives under `Desktop`. This isn't a config problem — no user-mode process holds the handle and the file permissions are normal; a kernel-level filter (most likely Windows Defender scanning the freshly written executables) is holding it. Two fixes:
+
+- **Build to a temp directory** — no settings changed:
+  ```
+  npx electron-builder -c.directories.output=%TEMP%/steam-stats-release
+  ```
+- **Or add a Defender exclusion** for the project folder (Windows Security → Virus & threat protection → Exclusions). That's a security setting, so decide for yourself whether it's worth it.
 
 ---
 

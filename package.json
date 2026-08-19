@@ -1,11 +1,12 @@
 {
   "name": "steam-dashboard",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A personal gaming analytics dashboard powered by the Steam Web API, HowLongToBeat, and your local Steam installation.",
   "author": "Greg",
   "license": "MIT",
   "type": "module",
+  "main": "electron/main.js",
   "engines": {
     "node": ">=22"
   },
@@ -15,33 +16,26 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "concurrently \"npm run server\" \"vite --port 5173\"",
-    "build:exe": "npm run build && pkg . --output 'dist-exe/Steam Stats'",
-    "build:exe:win": "npm run build && pkg . --target node22-win-x64 --output 'dist-exe/Steam Stats.exe'",
-    "build:release": "node build-release.js",
+    "dev:electron": "concurrently \"vite --port 5173\" \"electron . --dev\"",
+    "build:electron": "npm run build && node tools/generate-licenses.mjs && electron-builder",
+    "build:licenses": "node tools/generate-licenses.mjs",
+    "build:icons": "node tools/generate-icons.mjs",
     "test": "vitest run"
   },
-  "bin": "bootstrap.cjs",
-  "pkg": {
-    "assets": [
-      "dist/**/*"
-    ],
-    "targets": [
-      "node22-win-x64"
-    ],
-    "outputPath": "dist-exe"
-  },
+  "_dependencyNote": "Only packages the SERVER needs at runtime belong in dependencies — electron-builder ships exactly that set (and its transitive tree) into the packaged app. react/react-dom are compiled into dist/ by Vite and are never required at runtime, and concurrently only drives the dev scripts, so both live in devDependencies. Listing them as dependencies dragged ~27MB of yargs/chalk/babel into the build.",
   "dependencies": {
     "axios": "^1.7.2",
-    "concurrently": "^8.2.2",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "helmet": "^8.3.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "helmet": "^8.3.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
-    "@yao-pkg/pkg": "^6.21.0",
+    "concurrently": "^8.2.2",
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "vite": "^5.3.1",
     "vitest": "^4.1.10"
   }

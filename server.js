@@ -12,8 +12,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─────────────────────────────────────────────
 // PERSISTENT DATA DIRECTORY
-// release/ gets deleted and rebuilt from scratch by build-release.js on
-// every `npm run build:release`, so anything stored next to server.js
+// The packaged app's install folder is replaced wholesale on every update,
+// so anything stored next to server.js
 // (as the caches below used to be) is lost the moment a user replaces
 // their install folder with a new release. Storing everything in the
 // OS-standard per-user data location instead means it survives that —
@@ -124,7 +124,7 @@ app.use(cors({
   // Scoped to the actual origins this app runs on — the Vite dev server
   // (5173) and the packaged app serving itself (3001), each reachable by
   // plain localhost or by the friendly steamstats.localhost alias (see
-  // bootstrap.cjs / README) — rather than allowing any origin to call
+  // electron/main.js / README) — rather than allowing any origin to call
   // this API.
   origin: [
     'http://localhost:5173', 'http://localhost:3001', 'http://127.0.0.1:5173', 'http://127.0.0.1:3001',
@@ -1176,14 +1176,15 @@ app.get('/api/health', (req, res) => {
 // ─────────────────────────────────────────────
 // STATIC FRONTEND SERVING (packaged/production mode)
 // In normal dev, Vite serves the frontend on :5173 and proxies /api to this
-// server. In the packaged .exe there's no separate Vite server — this server
-// serves the built dist/ folder directly on the same port as the API.
-//
-// pkg bundles assets into a virtual filesystem; __dirname correctly resolves
-// inside that snapshot, so this path logic works both in dev and packaged.
+// server. In the packaged app there's no separate Vite server — this server
+// serves the built dist/ folder directly on the same port as the API, and
+// Electron's window loads it over HTTP like any other browser would.
 // ─────────────────────────────────────────────
 
-const DIST_DIR = path.join(__dirname, 'dist');
+// Normally dist/ sits next to this file. Electron's main process sets
+// STEAM_STATS_DIST explicitly so the packaged layout can put the built
+// frontend elsewhere without this file needing to know about it.
+const DIST_DIR = process.env.STEAM_STATS_DIST || path.join(__dirname, 'dist');
 const distExists = fs.existsSync(DIST_DIR) && fs.existsSync(path.join(DIST_DIR, 'index.html'));
 
 if (distExists) {
@@ -1199,12 +1200,12 @@ if (distExists) {
 // to be reachable from other devices. Without an explicit host, Express
 // defaults to 0.0.0.0 (all interfaces), which would expose the local Steam
 // data endpoints and settings routes to anyone else on the same network.
-app.listen(PORT, '127.0.0.1', () => {
+const server = app.listen(PORT, '127.0.0.1', () => {
   // steamstats.localhost is a real, working URL, not a placeholder — every
   // modern browser (and this server's own CORS allowlist above) resolves
   // any *.localhost hostname straight to loopback per RFC 6761, no hosts
-  // file or DNS setup required. See bootstrap.cjs for why plain "localhost"
-  // is deliberately kept for internal/non-browser use instead.
+  // file or DNS setup required. See electron/main.js for why plain
+  // "localhost" is deliberately kept for internal/non-browser use instead.
   console.log(`\n🎮 Steam Stats Server running on http://steamstats.localhost:${PORT} (also reachable at http://localhost:${PORT})`);
   console.log(`💾 Data folder: ${DATA_DIR}`);
   const steamPaths = findSteamPaths();
@@ -1226,4 +1227,17 @@ app.listen(PORT, '127.0.0.1', () => {
   });
   // Schedule automatic refresh every 4 minutes
   scheduleHltbRefresh();
+});
+
+// Without this, a port collision surfaces as an unhandled 'error' event that
+// the catch-all uncaughtException handler above swallows — leaving the app
+// alive but with nothing listening, which is far more confusing than failing
+// loudly. Electron's main process turns this into a visible dialog.
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use — is another copy of Steam Stats running?`);
+  } else {
+    console.error('❌ Server failed to start:', err);
+  }
+  process.exitCode = 1;
 });

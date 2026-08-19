@@ -261,6 +261,56 @@ export function mergeLocalData(apiGames, localConfig) {
   });
 }
 
+// ── Steam link routing ────────────────────────────────────────
+// Steam registers the steam:// protocol handler when it installs, so
+// steam://store/<appid> opens a store page in the desktop client instead of
+// a browser tab. That's almost always what someone wants from a library
+// dashboard — the client is already running, and the store page there can
+// actually install the game.
+//
+// The preference is deliberately tri-state. `undefined` means "auto": follow
+// whether a local Steam install was detected, which is the signal the user
+// already gave us by connecting one. Storing a plain boolean instead would
+// make "never chose" indistinguishable from "explicitly turned it off", so
+// enabling detection later couldn't safely start routing to the client.
+export const STEAM_LINK_PREF_KEY = 'steam_dashboard_open_links_in_steam';
+
+/** undefined = auto (follow detection), true/false = explicit user choice. */
+export function loadSteamLinkPref() {
+  try {
+    const raw = localStorage.getItem(STEAM_LINK_PREF_KEY);
+    if (raw === null) return undefined;
+    return JSON.parse(raw) === true;
+  } catch {
+    return undefined;
+  }
+}
+
+export function saveSteamLinkPref(value) {
+  try {
+    localStorage.setItem(STEAM_LINK_PREF_KEY, JSON.stringify(!!value));
+  } catch {}
+}
+
+/** Resolve the tri-state preference against whether Steam was actually found. */
+export function shouldUseSteamApp(pref, localConfigFound) {
+  if (typeof pref === 'boolean') return pref;
+  return !!localConfigFound;
+}
+
+/**
+ * Store-page URL for a game, routed to the desktop client or the web.
+ * appid is coerced and validated because it lands in a protocol URL — a
+ * non-numeric value has no business being handed to the OS's URL handler.
+ */
+export function steamStoreUrl(appid, useSteamApp) {
+  const id = String(appid ?? '');
+  if (!/^\d+$/.test(id)) return null;
+  return useSteamApp
+    ? `steam://store/${id}`
+    : `https://store.steampowered.com/app/${id}`;
+}
+
 // Snapshot/cache management
 const SNAPSHOT_KEY = 'steam_dashboard_snapshots';
 const CONFIG_KEY = 'steam_dashboard_config';

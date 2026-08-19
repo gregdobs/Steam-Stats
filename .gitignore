@@ -35,6 +35,11 @@ dist-ssr
 dist-exe/
 release/
 
+# Generated on every packaged build by tools/generate-licenses.mjs —
+# regenerated from the installed dependency tree, so committing it would
+# just go stale. The rest of build/ (electron-builder resources) is tracked.
+build/THIRD_PARTY_LICENSES.txt
+
 # Claude Code — personal machine overrides shouldn't be shared;
 # CLAUDE.md itself (project memory) is meant to be committed
 .claude/settings.local.json

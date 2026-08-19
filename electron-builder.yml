@@ -1,0 +1,64 @@
+appId: com.gregdobs.steamstats
+productName: Steam Stats
+copyright: Copyright © Greg
+
+directories:
+  # NOT the default "dist" — Vite already builds the frontend there, and
+  # letting electron-builder write into the same folder would have it
+  # packaging its own previous output.
+  output: release
+  buildResources: build
+
+# Everything the packaged app needs at runtime, and nothing else.
+#
+# node_modules is not listed: electron-builder ships package.json's
+# `dependencies` automatically, and that list is deliberately kept to the four
+# packages server.js actually imports. react/react-dom/concurrently live in
+# devDependencies for exactly this reason — see the note in package.json.
+# Excluding them by path here instead does NOT work, because their transitive
+# deps (yargs, chalk, @babel/*) still get pulled in on their own.
+files:
+  - electron/**/*
+  - server.js
+  - dist/**/*
+  - package.json
+
+# asar is off on purpose. The Express server serves the frontend with
+# express.static/res.sendFile, and those go through `send`, which does its own
+# fs.stat and stream handling. Electron patches fs for asar transparently but
+# that path has enough edge cases that a packaging bug would take out the
+# app's only window. dist/ is ~400KB, so the archive buys effectively nothing
+# here, and leaving files loose keeps the install inspectable — which suits an
+# MIT app whose console window was previously kept "because it's simpler to
+# debug".
+asar: false
+
+extraResources:
+  - from: build/THIRD_PARTY_LICENSES.txt
+    to: THIRD_PARTY_LICENSES.txt
+  - from: LICENSE
+    to: LICENSE
+
+# Every UI string in this app is English. Electron ships ~50 locale files by
+# default, which is ~47MB of translations for text that doesn't exist.
+electronLanguages:
+  - en-US
+
+win:
+  icon: public/icon-512.png
+  target:
+    # An installer for people who want Start-menu/desktop integration...
+    - nsis
+    # ...and a single self-contained .exe for download-and-run, no install.
+    - portable
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Steam Stats
+
+portable:
+  artifactName: Steam Stats ${version} portable.exe

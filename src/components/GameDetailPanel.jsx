@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../hooks/useAppContext.jsx';
-import { formatHours, formatLastPlayed, minutesToHours, getCompletionStatus, fetchAchievementRarity } from '../utils/steam.js';
+import { formatHours, formatLastPlayed, minutesToHours, getCompletionStatus, fetchAchievementRarity,
+  loadSteamLinkPref, shouldUseSteamApp, steamStoreUrl } from '../utils/steam.js';
 import { GameHeader } from './GameImage.jsx';
 import DetailSheet from './DetailSheet.jsx';
 
@@ -15,8 +16,13 @@ const STATUS_COLOR = {
 // game detail — renders inside a slide-in DetailSheet, or inline (no sheet
 // chrome) when embedded directly in another surface, e.g. Settings' games list.
 export default function GameDetailPanel({ game, onClose, achData, hltbData, anchorRect, inline }) {
-  const { ownedGames, recentGames } = useApp();
+  const { ownedGames, recentGames, localConfig } = useApp();
   const [rarity, setRarity] = useState(null);
+
+  // Read at render rather than held in state: the panel remounts each time
+  // it's opened, so it always reflects the current Settings choice.
+  const useSteamApp = shouldUseSteamApp(loadSteamLinkPref(), localConfig?.found);
+  const storeUrl = steamStoreUrl(game.appid, useSteamApp);
 
   // Global unlock rate for this game's achievements, scoped to a single
   // appid — same fetchAchievementRarity used by the Rarest Unlocks widget,
@@ -218,13 +224,16 @@ export default function GameDetailPanel({ game, onClose, achData, hltbData, anch
           </div>
         )}
 
-        {/* Steam store link */}
-        <a href={`https://store.steampowered.com/app/${game.appid}`} target="_blank" rel="noopener noreferrer"
-          className="ss-pill"
-          style={{ justifyContent: 'center', textDecoration: 'none' }}
-        >
-          View on Steam Store ↗
-        </a>
+        {/* Steam store link — opens in the Steam desktop client when one was
+            detected, unless the user has overridden that in Settings. */}
+        {storeUrl && (
+          <a href={storeUrl} target="_blank" rel="noopener noreferrer"
+            className="ss-pill"
+            style={{ justifyContent: 'center', textDecoration: 'none' }}
+          >
+            {useSteamApp ? 'View in Steam ↗' : 'View on Steam Store ↗'}
+          </a>
+        )}
       </div>
     </div>
   );
