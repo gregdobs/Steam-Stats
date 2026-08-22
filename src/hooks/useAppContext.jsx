@@ -3,7 +3,7 @@ import {
   fetchPlayerSummary, fetchOwnedGames, fetchRecentGames,
   fetchLocalSteamConfig, extractSteamId, resolveVanityUrl, saveConfig, loadConfig,
   saveSnapshot, loadSnapshots, mergeLocalData, computeHistoricalTrends, fetchHLTB,
-  fetchAchievementsBatch, hydrateConfigFromServer
+  fetchAchievementsBatch, hydrateConfigFromServer, hydrateSnapshotsFromServer
 } from '../utils/steam.js';
 import { THEME_BASE_BLUR, BLUR_MULTIPLIERS } from '../utils/themes.js';
 
@@ -138,6 +138,10 @@ export function AppProvider({ children }) {
     document.documentElement.style.setProperty('--ss-blur', `${blurPx}px`);
     localStorage.setItem('steam_theme', theme);
     localStorage.setItem('steam_blur_intensity', blurIntensity);
+    // Match the native window frame to the app in the desktop build, so a
+    // light Windows title bar doesn't sit on top of a near-black page.
+    // Undefined in a browser or PWA, where there's no frame to match.
+    window.steamStatsShell?.setFrameTheme(theme);
   }, [theme, blurIntensity]);
 
   const loadData = useCallback(async (apiKey, steamUrl) => {
@@ -176,6 +180,12 @@ export function AppProvider({ children }) {
 
       setOwnedGames(mergedGames);
       setRecentGames(recent);
+
+      // Pull any history the durable archive has that this browser profile
+      // doesn't, BEFORE writing today's snapshot — otherwise a fresh/cleared
+      // profile would save a lone snapshot and report zero tracked days while
+      // months of history sat in snapshots.json unread.
+      await hydrateSnapshotsFromServer(steamId);
 
       // Save snapshot for historical tracking
       saveSnapshot(steamId, owned, recent);

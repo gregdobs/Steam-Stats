@@ -1,7 +1,7 @@
 {
   "name": "steam-dashboard",
   "private": true,
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "A personal gaming analytics dashboard powered by the Steam Web API, HowLongToBeat, and your local Steam installation.",
   "author": "Greg",
   "license": "MIT",

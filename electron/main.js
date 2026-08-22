@@ -16,7 +16,7 @@
 // still installable as a PWA) for anyone who prefers that.
 // ─────────────────────────────────────────────
 
-import { app, BrowserWindow, shell, dialog, session } from 'electron';
+import { app, BrowserWindow, shell, dialog, session, nativeTheme, ipcMain } from 'electron';
 import path from 'path';
 import http from 'http';
 import { fileURLToPath } from 'url';
@@ -26,6 +26,21 @@ const ROOT = path.join(__dirname, '..');
 
 const PORT = 3001;
 const isDev = process.argv.includes('--dev');
+
+// Windows draws the title bar from Chromium's dark-mode state, so this is what
+// stops a white frame sitting on top of a near-black app. Set before any
+// window exists so the splash and the first paint are already correct — doing
+// it later produces a visible light-to-dark flip on launch.
+//
+// Dark is the right default rather than 'system': three of the four themes are
+// dark and the app opens on the dark one. The renderer corrects it below when
+// someone is actually using the light theme — forcing dark unconditionally
+// would just invert the mismatch for them.
+nativeTheme.themeSource = 'dark';
+
+ipcMain.on('steam-stats:frame-theme', (_event, theme) => {
+  nativeTheme.themeSource = theme === 'light' ? 'light' : 'dark';
+});
 
 // The window is a Chromium navigation, so it gets the friendly hostname per
 // the project's .localhost convention. The health poll below deliberately
@@ -133,6 +148,9 @@ function createWindow() {
       // It has no need for Node, so it doesn't get it.
       nodeIntegration: false,
       contextIsolation: true,
+      // Exposes exactly one function, for matching the window frame to the
+      // app theme. See the file for why this isn't a general IPC surface.
+      preload: path.join(__dirname, 'preload.cjs'),
     },
   });
 

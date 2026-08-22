@@ -30,6 +30,9 @@ const NAV_ICONS = {
   dashboard: (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="2" y="2" width="5" height="5" rx="1.2"></rect><rect x="9" y="2" width="5" height="5" rx="1.2"></rect><rect x="2" y="9" width="5" height="5" rx="1.2"></rect><rect x="9" y="9" width="5" height="5" rx="1.2"></rect></svg>
   ),
+  calendar: (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><rect x="2" y="3" width="12" height="11" rx="1.8"></rect><path d="M2 6.6h12M5.5 1.8v2.2M10.5 1.8v2.2"></path></svg>
+  ),
   library: (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><rect x="2.5" y="2.5" width="4" height="11" rx="1.2"></rect><rect x="9.5" y="2.5" width="4" height="11" rx="1.2"></rect></svg>
   ),
@@ -44,8 +47,13 @@ const NAV_ICONS = {
   ),
 };
 
+// Calendar sits next to Dashboard rather than next to History on purpose:
+// its primary layer is recent day-by-day playtime, so it belongs in the
+// "what am I playing now" cluster. Adjacency is also what keeps it from
+// reading as a synonym for History two slots away.
 const NAV_ITEMS = [
   { id: 'dashboard',    label: 'Dashboard' },
+  { id: 'calendar',     label: 'Calendar' },
   { id: 'library',      label: 'Library' },
   { id: 'progress',     label: 'Progress' },
   { id: 'achievements', label: 'Achievements' },

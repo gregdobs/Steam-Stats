@@ -384,38 +384,95 @@ export async function clearServerMirrors(steamId) {
   }
 }
 
+// localStorage holds a WORKING SET, not the record. It's capped because it
+// shares a ~5MB per-origin quota with the achievement and HLTB caches, and a
+// full snapshot runs ~18KB. The durable copy is the server archive, which is
+// delta-encoded and keeps everything (see server.js's SNAPSHOT ARCHIVE note).
+export const SNAPSHOT_RETENTION_DAYS = 90;
+
+// One snapshot per calendar day, latest wins. Used for every combine in this
+// file: today's entry replaces itself as the day goes on, and history pulled
+// back from the archive folds into whatever is already local without
+// duplicating days. Mirrors dedupeSnapshotsByDay() in server.js.
+export function mergeSnapshotLists(...lists) {
+  const byDay = new Map();
+  for (const list of lists) {
+    for (const s of (list || [])) {
+      if (!s || typeof s.timestamp !== 'number' || !Array.isArray(s.games)) continue;
+      const key = new Date(s.timestamp).toDateString();
+      const existing = byDay.get(key);
+      if (!existing || s.timestamp >= existing.timestamp) byDay.set(key, s);
+    }
+  }
+  return [...byDay.values()].sort((a, b) => a.timestamp - b.timestamp);
+}
+
+const snapshotSignature = (list) => `${list.length}:${list.map(s => s.timestamp).join(',')}`;
+
+function writeSnapshotsToStorage(steamId, snapshots) {
+  const all = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || '{}');
+  all[steamId] = snapshots;
+  localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(all));
+}
+
 export function saveSnapshot(steamId, games, recentGames) {
   try {
-    const existing = loadSnapshots(steamId);
-    const now = Date.now();
-    const today = new Date().toDateString();
-
-    // Only one snapshot per day per user
-    const filtered = existing.filter(s => new Date(s.timestamp).toDateString() !== today);
     const snapshot = {
-      timestamp: now,
-      date: today,
+      timestamp: Date.now(),
+      date: new Date().toDateString(),
       games: games.map(g => ({ appid: g.appid, playtime_forever: g.playtime_forever, playtime_2weeks: g.playtime_2weeks || 0 })),
       recentGames: recentGames.map(g => ({ appid: g.appid, playtime_2weeks: g.playtime_2weeks || 0 }))
     };
 
-    filtered.push(snapshot);
-    // Keep last 90 days of snapshots
-    const trimmed = filtered.slice(-90);
+    const trimmed = mergeSnapshotLists(loadSnapshots(steamId), [snapshot]).slice(-SNAPSHOT_RETENTION_DAYS);
+    writeSnapshotsToStorage(steamId, trimmed);
 
-    const allSnapshots = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || '{}');
-    allSnapshots[steamId] = trimmed;
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(allSnapshots));
-
-    // Mirror to the persistent data folder — see saveConfig()'s comment
-    // for why this exists alongside localStorage.
+    // Mirror to the persistent data folder. Posting only the retention window
+    // is safe because the server MERGES into its archive rather than
+    // replacing it — it used to replace, which quietly capped the durable
+    // copy at whatever the client happened to be holding.
+    // Failures are non-fatal — localStorage already has the data — but they
+    // are NOT silent. A swallowed error here once hid the archive rejecting
+    // every post as too large, which quietly disabled the only durable copy.
     fetch(`/api/snapshots/${steamId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ snapshots: trimmed }),
-    }).catch(() => {});
+    })
+      .then(res => {
+        if (!res.ok) console.warn(`Snapshot archive rejected the mirror write (HTTP ${res.status}) — history is only in localStorage until this succeeds.`);
+      })
+      .catch(err => console.warn('Could not reach the snapshot archive:', err?.message || err));
   } catch (e) {
     console.warn('Failed to save snapshot:', e);
+  }
+}
+
+// The counterpart to hydrateConfigFromServer, and the reason the archive is
+// worth keeping at all: without this, snapshots.json was written but never
+// read, so a cleared Chromium profile — or a changed port, which is a
+// different ORIGIN and therefore different localStorage — lost the entire
+// history while a perfectly good copy sat on disk.
+export async function hydrateSnapshotsFromServer(steamId) {
+  if (!steamId) return null;
+  try {
+    const res = await fetch(`/api/snapshots/${steamId}?limit=${SNAPSHOT_RETENTION_DAYS}`);
+    if (!res.ok) return null;
+    const { snapshots, total } = await res.json();
+    if (!Array.isArray(snapshots) || snapshots.length === 0) return null;
+
+    const local = loadSnapshots(steamId);
+    const merged = mergeSnapshotLists(local, snapshots).slice(-SNAPSHOT_RETENTION_DAYS);
+    if (snapshotSignature(merged) !== snapshotSignature(local)) {
+      writeSnapshotsToStorage(steamId, merged);
+    }
+    return {
+      restored: Math.max(0, merged.length - local.length),
+      local: merged.length,
+      archived: typeof total === 'number' ? total : merged.length,
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -426,6 +483,71 @@ export function loadSnapshots(steamId) {
   } catch {
     return [];
   }
+}
+
+// Recency for the UI — "when did this last take a reading, and when's the
+// next one". Snapshots are written once per app open, deduped to one a day,
+// so the next one lands the next day the app is opened.
+export function getSnapshotMeta(steamId) {
+  const snapshots = loadSnapshots(steamId);
+  if (snapshots.length === 0) return { count: 0, first: null, last: null, takenToday: false };
+  const last = snapshots[snapshots.length - 1].timestamp;
+  return {
+    count: snapshots.length,
+    first: snapshots[0].timestamp,
+    last,
+    takenToday: new Date(last).toDateString() === new Date().toDateString(),
+  };
+}
+
+// ── Backup / restore ────────────────────────────────────────────────────
+// Exports the ARCHIVE (not just the local window), so a backup taken after
+// years of use carries all of it rather than the last 90 days.
+export const SNAPSHOT_BACKUP_FORMAT = 'steam-stats-snapshot-backup';
+
+export async function buildSnapshotBackup(steamId) {
+  let snapshots = loadSnapshots(steamId);
+  try {
+    const res = await fetch(`/api/snapshots/${steamId}`);
+    if (res.ok) {
+      const { snapshots: archived } = await res.json();
+      if (Array.isArray(archived)) snapshots = mergeSnapshotLists(snapshots, archived);
+    }
+  } catch {}
+  return {
+    format: SNAPSHOT_BACKUP_FORMAT,
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    steamId,
+    snapshotCount: snapshots.length,
+    snapshots,
+  };
+}
+
+// Merges rather than replaces, so importing an old backup can only ever add
+// history back — it can't wipe out days the current install already has.
+export async function applySnapshotBackup(payload) {
+  if (!payload || payload.format !== SNAPSHOT_BACKUP_FORMAT || !Array.isArray(payload.snapshots)) {
+    throw new Error('That doesn’t look like a Steam Stats snapshot backup.');
+  }
+  const steamId = payload.steamId;
+  if (!steamId) throw new Error('The backup file has no Steam ID in it.');
+
+  const local = loadSnapshots(steamId);
+  const merged = mergeSnapshotLists(local, payload.snapshots);
+  writeSnapshotsToStorage(steamId, merged.slice(-SNAPSHOT_RETENTION_DAYS));
+
+  // Push the whole merged set at the archive, not just the trimmed window,
+  // so anything older than the retention cap is preserved on disk.
+  try {
+    await fetch(`/api/snapshots/${steamId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snapshots: merged }),
+    });
+  } catch {}
+
+  return { steamId, added: merged.length - local.length, total: merged.length };
 }
 
 export function computeHistoricalTrends(steamId) {
@@ -1060,3 +1182,335 @@ export function computePlayStreak(steamId) {
   };
 }
 
+
+// ─────────────────────────────────────────────
+// CALENDAR
+//
+// The day-by-day view needs two things every other snapshot helper here
+// throws away: the per-game breakdown behind each daily total, and an
+// explicit record of which days we actually have coverage for.
+//
+// That second part matters more than it sounds. The other snapshot-derived
+// charts treat a missing day as zero (getDailyPlaytimeSeries does
+// `byDate.get(key) || 0`), which is harmless on a 30px sparkline and a lie
+// on a calendar — a blank week reads as "I didn't play" when it really
+// means "I didn't open Steam Stats". So days are tri-stated: `played`,
+// `idle` (covered by a clean pair and genuinely zero), and `uncovered`
+// (no clean pair — we don't know, and we say so).
+//
+// Attribution is per snapshot pair, not per session. A delta is only
+// pinned to a single date when consecutive snapshots are exactly one
+// calendar day apart. Wider gaps hold a real total that can't be split
+// across the days inside them, so those days stay `uncovered` and carry
+// the span total for context rather than having an invented daily figure
+// painted on them — which is also what stops "days I happened to open the
+// app" from masquerading as "days I played a lot".
+// ─────────────────────────────────────────────
+
+export const DAY_STATES = {
+  PLAYED: 'played',       // clean 1-day delta, > 0 minutes
+  IDLE: 'idle',           // clean 1-day delta, exactly 0 minutes
+  UNCOVERED: 'uncovered', // inside tracking range but no clean delta
+  UNTRACKED: 'untracked', // before this install started taking snapshots
+  FUTURE: 'future',       // hasn't happened yet
+};
+
+// Matches the 7-day floor the other daily percentile uses in this file.
+const MIN_DAYS_FOR_DAY_PERCENTILE = 7;
+
+// A DAY RECORD is the normalised result of diffing one consecutive snapshot
+// pair: `{ from, to, minutes, games: [{ appid, minutes, isFirstPlay }] }`.
+//
+// Two sources produce these — localStorage's 90-day working set (below) and
+// the server's /daily endpoint, which walks the full archive. Both feed
+// coverageFromDayRecords, so the rules about what a day MEANS exist exactly
+// once no matter how deep the history goes.
+export function buildDayRecordsFromSnapshots(snapshots) {
+  const records = [];
+  for (let i = 1; i < snapshots.length; i++) {
+    const prev = snapshots[i - 1];
+    const curr = snapshots[i];
+    const prevMap = new Map((prev.games || []).map(g => [g.appid, g.playtime_forever || 0]));
+    const games = [];
+    let minutes = 0;
+    for (const g of (curr.games || [])) {
+      const before = prevMap.get(g.appid);
+      const delta = (g.playtime_forever || 0) - (before || 0);
+      if (delta <= 0) continue;
+      games.push({
+        appid: g.appid,
+        minutes: delta,
+        // Only claimed when the game was already in the previous snapshot
+        // sitting at zero. A game that simply wasn't in the last snapshot
+        // might be newly bought, or might have been missed — "the first
+        // time you played it" is only honest for the case we watched.
+        isFirstPlay: before === 0,
+      });
+      minutes += delta;
+    }
+    games.sort((a, b) => b.minutes - a.minutes);
+    records.push({ from: prev.timestamp, to: curr.timestamp, minutes, games });
+  }
+  return records;
+}
+
+// One record per target day, preferring the freshest. The archive can lag
+// localStorage by a moment (the mirror POST is fire-and-forget), so the local
+// copy wins for any day both cover.
+export function mergeDayRecords(...lists) {
+  const byDay = new Map();
+  for (const list of lists) {
+    for (const r of (list || [])) {
+      if (!r || typeof r.from !== 'number' || typeof r.to !== 'number') continue;
+      const key = toMidnight(r.to).toDateString();
+      const existing = byDay.get(key);
+      if (!existing || r.to >= existing.to) byDay.set(key, r);
+    }
+  }
+  return [...byDay.values()].sort((a, b) => a.to - b.to);
+}
+
+// THE tri-state rules. Everything the calendar believes about a day is
+// decided here and nowhere else — see the section header above for why the
+// distinction between "played nothing" and "wasn't watching" is load-bearing.
+export function coverageFromDayRecords(records, { firstTracked = null, lastTracked = null } = {}) {
+  const byDate = new Map();
+  let coveredDays = 0;
+  let uncoveredDays = 0;
+  let playedDays = 0;
+
+  for (const r of records) {
+    const prevMid = toMidnight(r.from);
+    const currMid = toMidnight(r.to);
+    const dayGap = Math.round((currMid - prevMid) / 86400000);
+    if (dayGap < 1) continue; // same-day pair — saveSnapshot dedupes, but don't assume
+
+    const minutes = r.minutes || 0;
+    const games = r.games || [];
+
+    if (dayGap === 1) {
+      // Keyed off the timestamp rather than any stored `date` string so the
+      // two can never disagree — the gap branch below derives its keys the
+      // same way, and one source of truth beats two that ought to match.
+      byDate.set(currMid.toDateString(), {
+        state: minutes > 0 ? DAY_STATES.PLAYED : DAY_STATES.IDLE,
+        timestamp: currMid.getTime(),
+        minutes,
+        games,
+      });
+      coveredDays++;
+      if (minutes > 0) playedDays++;
+    } else {
+      // The delta is real but belongs to the whole span. Every day in the
+      // gap gets the span for context and nothing attributed to it alone.
+      const spanFrom = new Date(prevMid);
+      spanFrom.setDate(spanFrom.getDate() + 1);
+      const span = {
+        spanMinutes: minutes,
+        spanDays: dayGap,
+        spanFrom: spanFrom.toDateString(),
+        spanTo: currMid.toDateString(),
+        spanGames: games,
+      };
+      const cursor = new Date(spanFrom);
+      while (cursor <= currMid) {
+        byDate.set(cursor.toDateString(), {
+          state: DAY_STATES.UNCOVERED,
+          timestamp: toMidnight(cursor).getTime(),
+          minutes: 0,
+          games: [],
+          ...span,
+        });
+        uncoveredDays++;
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+  }
+
+  return {
+    byDate,
+    // The earliest snapshot's own day has nothing to diff against, so it
+    // falls inside the range but resolves as `uncovered` — which is the
+    // truth. Sourcing this from the ARCHIVE rather than localStorage is what
+    // stops months older than the 90-day working set from being labelled
+    // "before tracking started" once real history accumulates behind them.
+    firstTracked: firstTracked == null ? null : toMidnight(firstTracked).getTime(),
+    lastTracked: lastTracked == null ? null : toMidnight(lastTracked).getTime(),
+    coveredDays,
+    uncoveredDays,
+    playedDays,
+  };
+}
+
+// The synchronous, local-only path. Reads the 90-day working set, so it's
+// instant and works offline — the Calendar renders from this immediately and
+// then deepens once the archive answers.
+export function computeDailyCoverage(steamId) {
+  const snapshots = steamId ? loadSnapshots(steamId) : [];
+  if (snapshots.length < 2) {
+    return { byDate: new Map(), firstTracked: null, lastTracked: null, coveredDays: 0, uncoveredDays: 0, playedDays: 0 };
+  }
+  return coverageFromDayRecords(buildDayRecordsFromSnapshots(snapshots), {
+    firstTracked: snapshots[0].timestamp,
+    lastTracked: snapshots[snapshots.length - 1].timestamp,
+  });
+}
+
+// The deep path: every day the archive holds, however far back. Merges the
+// local working set over the top so today's reading is never stale, then runs
+// the same coverage rules over the combined records.
+export async function computeArchiveCoverage(steamId) {
+  if (!steamId) return null;
+  try {
+    const res = await fetch(`/api/snapshots/${steamId}/daily`);
+    if (!res.ok) return null;
+    const { records, firstTracked, lastTracked } = await res.json();
+    if (!Array.isArray(records) || records.length === 0) return null;
+
+    const snapshots = loadSnapshots(steamId);
+    const localRecords = snapshots.length >= 2 ? buildDayRecordsFromSnapshots(snapshots) : [];
+    const merged = mergeDayRecords(records, localRecords);
+
+    const localFirst = snapshots[0]?.timestamp ?? null;
+    const localLast = snapshots[snapshots.length - 1]?.timestamp ?? null;
+    return coverageFromDayRecords(merged, {
+      firstTracked: Math.min(firstTracked ?? Infinity, localFirst ?? Infinity),
+      lastTracked: Math.max(lastTracked ?? -Infinity, localLast ?? -Infinity),
+    });
+  } catch {
+    return null;
+  }
+}
+
+// Resolves one calendar date against the coverage map. Kept next to the map
+// itself so the "no entry means uncovered, unless it predates tracking"
+// rule lives in one place rather than being re-derived per view.
+export function resolveDayState(dateKey, timestamp, coverage, todayTs) {
+  if (timestamp > todayTs) return { state: DAY_STATES.FUTURE, minutes: 0, games: [] };
+  const entry = coverage.byDate.get(dateKey);
+  if (entry) return entry;
+  if (coverage.firstTracked == null || timestamp < coverage.firstTracked) {
+    return { state: DAY_STATES.UNTRACKED, minutes: 0, games: [] };
+  }
+  return { state: DAY_STATES.UNCOVERED, minutes: 0, games: [] };
+}
+
+// Achievement unlocks bucketed by day. Unlike the snapshot layer this reaches
+// back as far as the account does (see the unlock-timeline section above),
+// which is what keeps the calendar from being blank for every month that
+// predates this app being installed.
+//
+// Keyed on the LOCAL date, not UTC like computeMonthlyUnlocks: these keys sit
+// alongside snapshot dates (which are local toDateString()), and a 9pm unlock
+// belongs to that evening rather than to the next UTC day.
+export function computeDailyUnlocks(achCache) {
+  const grouped = new Map(); // dateString -> Map<appid, achievement[]>
+
+  for (const [appid, data] of Object.entries(achCache || {})) {
+    for (const a of (data?.earnedDetails || [])) {
+      if (!a.unlocktime) continue;
+      const key = new Date(a.unlocktime * 1000).toDateString();
+      if (!grouped.has(key)) grouped.set(key, new Map());
+      const games = grouped.get(key);
+      if (!games.has(appid)) games.set(appid, []);
+      games.get(appid).push(a);
+    }
+  }
+
+  const byDate = new Map();
+  for (const [date, games] of grouped) {
+    const list = [...games.entries()]
+      .map(([appid, achievements]) => ({
+        appid,
+        achievements: [...achievements].sort((a, b) => a.unlocktime - b.unlocktime),
+      }))
+      .sort((a, b) => b.achievements.length - a.achievements.length);
+    byDate.set(date, {
+      count: list.reduce((s, g) => s + g.achievements.length, 0),
+      games: list,
+    });
+  }
+  return byDate;
+}
+
+// Where one day sits against every other day this install has covered.
+// Zero-minute days stay in the pool on purpose — "a top 10% day" should be
+// measured against the quiet days too, not only against days you played.
+export function computeDayPercentile(dateKey, coverage) {
+  const day = coverage.byDate.get(dateKey);
+  if (!day || (day.state !== DAY_STATES.PLAYED && day.state !== DAY_STATES.IDLE)) return null;
+  const pool = [...coverage.byDate.values()]
+    .filter(d => d.state === DAY_STATES.PLAYED || d.state === DAY_STATES.IDLE)
+    .map(d => d.minutes);
+  if (pool.length < MIN_DAYS_FOR_DAY_PERCENTILE) return null;
+  return { percentile: percentileRank(day.minutes, pool), sampleSize: pool.length };
+}
+
+// Everything the month rail reports, in one pass over the month's days.
+// Returns appids rather than names — the caller already holds ownedGames and
+// can resolve them without this needing the whole library passed in.
+export function computeMonthSummary(year, month, coverage, unlocksByDate, todayTs = Date.now()) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = toMidnight(todayTs).getTime();
+
+  let totalMinutes = 0;
+  let playedDays = 0;
+  let coveredDays = 0;
+  let uncoveredDays = 0;
+  let unlockCount = 0;
+  let busiestDay = null;
+  let longestStreak = 0;
+  let runningStreak = 0;
+  const gameMinutes = new Map();
+  const firstPlays = [];
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(year, month, day);
+    const key = d.toDateString();
+    const ts = d.getTime();
+    if (ts > today) break;
+
+    unlockCount += unlocksByDate.get(key)?.count || 0;
+
+    const entry = resolveDayState(key, ts, coverage, today);
+    if (entry.state === DAY_STATES.UNCOVERED) uncoveredDays++;
+    if (entry.state !== DAY_STATES.PLAYED && entry.state !== DAY_STATES.IDLE) {
+      // A gap can't extend a run and shouldn't be scored as a break either —
+      // the run simply stops being measurable here.
+      runningStreak = 0;
+      continue;
+    }
+
+    coveredDays++;
+    totalMinutes += entry.minutes;
+
+    if (entry.minutes > 0) {
+      playedDays++;
+      runningStreak++;
+      longestStreak = Math.max(longestStreak, runningStreak);
+      if (!busiestDay || entry.minutes > busiestDay.minutes) {
+        busiestDay = { date: key, timestamp: ts, minutes: entry.minutes };
+      }
+      for (const g of entry.games) {
+        gameMinutes.set(g.appid, (gameMinutes.get(g.appid) || 0) + g.minutes);
+        if (g.isFirstPlay) firstPlays.push({ appid: g.appid, date: key, timestamp: ts });
+      }
+    } else {
+      runningStreak = 0;
+    }
+  }
+
+  return {
+    totalMinutes,
+    playedDays,
+    coveredDays,
+    uncoveredDays,
+    unlockCount,
+    busiestDay,
+    longestStreak,
+    topGames: [...gameMinutes.entries()]
+      .map(([appid, minutes]) => ({ appid, minutes }))
+      .sort((a, b) => b.minutes - a.minutes),
+    firstPlays,
+  };
+}

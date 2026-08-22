@@ -36,6 +36,17 @@ Prefer to run from source instead (for development, or if you don't trust an uns
 - **What Should I Play Tonight** — a random, unfiltered pick from anything with under 3 hours logged (untouched or barely started). Comes with 3 rerolls before it commits you to the answer.
 - **Desktop vs. Deck** — what share of your all-time hours were played on Steam Deck, when that's ever been the case.
 
+### 📅 Calendar
+- Month grid of day-by-day playtime — click any day to see the hours split across games, plus the achievements you unlocked that day
+- **Days are tri-stated, so a gap never poses as a zero.** A day is shown as played, as tracked-but-idle, or as *no coverage* — that last one meaning Steam Stats wasn't open to record it. Elsewhere in the app a missing day quietly reads as zero, which is harmless on a sparkline and misleading on a calendar
+- A day's playtime is only pinned to that date when snapshots exist a day either side of it. Longer gaps hold a real total that can't be split honestly, so the days show the span total for context instead of a made-up daily figure — which is also what stops "days you happened to open the app" looking like your biggest gaming days
+- Month rail with hours, days played, longest run, coverage, most-played games and anything you **started** that month; it switches to a single day's detail when you pick one
+- Hover any achievement icon in a day's detail for what it was for and how many owners have it
+- Filter the whole grid to one game to see exactly when you binged it
+- **Month jump** — click the month name for a dropdown of every month on record, shaded by how many achievements you unlocked in each, with a dot marking the months that also have day-level playtime
+- **Year-over-year** — any month can be compared against the same month a year earlier, hours and days played side by side
+- Playtime history goes back as far as you've used the app, not a rolling window: the app keeps every day it ever recorded and the Calendar reads all of it. The achievement layer is dated by Steam and reaches back to your first unlock, so the page has something to show on day one too
+
 ### 📚 Library
 - Library utilization donut (played vs. untouched) plus derived stats — median hours on a played game, % of hours in your top 10, top game's share of your total time
 - "Time since last played" lanes — every played game bucketed by recency, dot size scaled to lifetime hours — click a dot to filter the table
@@ -63,7 +74,7 @@ One page spanning your whole library, from untouched to overplayed:
 - Achievement unlocks over time — a month-by-month trend line built from Steam's own achievement-unlock timestamps, not local tracking, so it's populated from day one
 - "When you last touched each game" — every played game bucketed by last-played date
 - "Your Steam years" — unlocks per year, broken down by your top games
-- This is separate from the Dashboard's Play Streak / Personal Percentile, which do need a few days of local snapshot history to build up (see below)
+- This is separate from the Dashboard's Play Streak / Personal Percentile and the Calendar's playtime layer, which do need a few days of local snapshot history to build up (see below)
 
 ---
 
@@ -75,7 +86,7 @@ Click your **profile name** in the top-right corner to open Settings:
 - **Local Steam Path** — detected path, library folders, a manual override if auto-detection misses your install, and **Open Steam Links in the Steam App** (see below)
 - **HowLongToBeat** — integration status and a test lookup
 - **Display** — light/dark mode, plus **Feature Flags** for the experimental 7-Day and 30-Day dashboard periods (these use local snapshot data, so accuracy improves the longer you've had the app running — they're opt-in rather than on by default for that reason)
-- **Data & Cache** — data folder location, snapshot count, clear snapshots, or reset the app entirely
+- **Data & Cache** — data folder location, snapshot count and log, **Backup Snapshots** (export/import your playtime history), clear snapshots, or reset the app entirely
 - **Debug Info** — copy status info when reporting issues
 
 ### Open Steam Links in the Steam App
@@ -103,9 +114,23 @@ update — install the new version (or swap in the new portable `.exe`) and
 everything carries over. **Settings → Data & Cache → Open Folder** takes you
 straight there.
 
-App config and snapshot history are also mirrored into your browser's
-`localStorage` for fast reads; the data folder is the durable copy that survives
-both app updates and a cleared browser profile.
+App config and snapshot history are also kept in your browser's `localStorage`
+for fast reads, but that copy is only a working set — the data folder is the
+durable one. On startup the app pulls any history the folder has that the
+browser profile doesn't, so a cleared profile, a new machine, or a changed port
+restores rather than starts over.
+
+**Snapshot history is the one thing here that can't be re-fetched.** Steam's API
+reports lifetime totals, not sessions, so a day that was never recorded is gone
+for good — unlike the caches, which just re-download. Two things follow from
+that:
+
+- `snapshots.json` keeps **everything**, not the 90 days `localStorage` holds. It's
+  delta-encoded (only the games whose playtime moved are stored per day), so a
+  day costs a few hundred bytes rather than tens of kilobytes.
+- **Settings → Data & Cache → Backup Snapshots** exports the full archive to a
+  file and imports one back. Import merges — it can only add days you're missing,
+  never remove days you already have.
 
 ---
 

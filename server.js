@@ -63,13 +63,143 @@ function readJsonFile(filePath, fallback) {
   return fallback;
 }
 
-function writeJsonFile(filePath, data) {
+// `pretty` defaults to true because config.json and the caches are small and
+// occasionally worth eyeballing by hand. The snapshot archive opts out: it's
+// machine-only, and 2-space indentation measured 92% overhead on it.
+function writeJsonFile(filePath, data, { pretty = true } = {}) {
   try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    fs.writeFileSync(filePath, pretty ? JSON.stringify(data, null, 2) : JSON.stringify(data), 'utf8');
   } catch (err) {
     console.warn(`Failed to write ${filePath}:`, err.message);
   }
 }
+
+// ─────────────────────────────────────────────
+// SNAPSHOT ARCHIVE
+//
+// This file is the only durable copy of playtime history. localStorage holds
+// the working set, but it lives in the Chromium profile keyed by ORIGIN — so
+// it evaporates if the port changes, if userData moves, or if the profile is
+// cleared. Everything below exists so that losing it isn't losing the data.
+//
+// v1 stored `{ steamId: [fullSnapshot, ...] }` pretty-printed, where each
+// snapshot carried the entire library. Measured against a real 311-game
+// library, 99.7% of the rows in a snapshot repeat the previous day byte for
+// byte, and one snapshot cost ~36KB on disk — roughly 13MB a year, and ~400MB
+// over five years for a 2,000-game library. v2 keeps one full base snapshot
+// per user and stores only the games whose playtime moved after that, which
+// measured a 98.2% reduction (18,614 bytes -> 338 per snapshot).
+//
+// The client is unaffected: GET reconstitutes full snapshots, so everything
+// downstream (buildDailyDeltas, computeDailyCoverage, the Settings log) keeps
+// receiving exactly the shape it always did. Keep it that way — the encoding
+// is a storage detail and should not leak into the app's data model.
+// ─────────────────────────────────────────────
+const SNAPSHOT_ARCHIVE_VERSION = 2;
+
+const emptyArchive = () => ({ version: SNAPSHOT_ARCHIVE_VERSION, users: {} });
+
+// One snapshot per calendar day, keeping the latest when a day appears twice.
+// The client rewrites "today" as the day goes on, so a later timestamp for a
+// day it already holds is an update, not a duplicate.
+function dedupeSnapshotsByDay(snapshots) {
+  const byDay = new Map();
+  for (const s of snapshots) {
+    if (!s || typeof s.timestamp !== 'number' || !Array.isArray(s.games)) continue;
+    const key = new Date(s.timestamp).toDateString();
+    const existing = byDay.get(key);
+    if (!existing || s.timestamp >= existing.timestamp) byDay.set(key, s);
+  }
+  return [...byDay.values()].sort((a, b) => a.timestamp - b.timestamp);
+}
+
+function encodeSnapshots(snapshots) {
+  const sorted = dedupeSnapshotsByDay(snapshots);
+  if (sorted.length === 0) return { base: null, deltas: [] };
+
+  const base = sorted[0];
+  const state = new Map((base.games || []).map(g => [g.appid, g]));
+  const deltas = [];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const snap = sorted[i];
+    const changed = [];
+    const present = new Set();
+    for (const g of (snap.games || [])) {
+      present.add(g.appid);
+      const prev = state.get(g.appid);
+      // playtime_2weeks is tracked alongside playtime_forever so a round-trip
+      // is lossless. It only moves for recently played games, so carrying it
+      // costs almost nothing against the redundancy this is removing.
+      if (!prev
+        || (prev.playtime_forever || 0) !== (g.playtime_forever || 0)
+        || (prev.playtime_2weeks || 0) !== (g.playtime_2weeks || 0)) {
+        const row = {
+          appid: g.appid,
+          playtime_forever: g.playtime_forever || 0,
+          playtime_2weeks: g.playtime_2weeks || 0,
+        };
+        changed.push(row);
+        state.set(g.appid, row);
+      }
+    }
+    // Games that left the library between snapshots, so a decode doesn't
+    // resurrect them forever.
+    const removed = [...state.keys()].filter(id => !present.has(id));
+    for (const id of removed) state.delete(id);
+
+    deltas.push({
+      timestamp: snap.timestamp,
+      date: snap.date,
+      changed,
+      ...(removed.length > 0 ? { removed } : {}),
+      recentGames: snap.recentGames || [],
+    });
+  }
+
+  return { base, deltas };
+}
+
+function decodeSnapshots(entry) {
+  if (!entry || !entry.base) return [];
+
+  const state = new Map((entry.base.games || []).map(g => [g.appid, { ...g }]));
+  const out = [{
+    timestamp: entry.base.timestamp,
+    date: entry.base.date,
+    games: [...state.values()],
+    recentGames: entry.base.recentGames || [],
+  }];
+
+  for (const d of (entry.deltas || [])) {
+    for (const g of (d.changed || [])) state.set(g.appid, { ...g });
+    for (const id of (d.removed || [])) state.delete(id);
+    out.push({
+      timestamp: d.timestamp,
+      date: d.date,
+      games: [...state.values()].map(g => ({ ...g })),
+      recentGames: d.recentGames || [],
+    });
+  }
+
+  return out;
+}
+
+// Reads either format. v1 files are converted in memory and only rewritten on
+// the next POST, so a read never has the side effect of migrating on disk.
+function readSnapshotArchive() {
+  const raw = readJsonFile(SNAPSHOTS_FILE, null);
+  if (!raw || typeof raw !== 'object') return emptyArchive();
+  if (raw.version === SNAPSHOT_ARCHIVE_VERSION && raw.users) return raw;
+
+  const archive = emptyArchive();
+  for (const [steamId, snapshots] of Object.entries(raw)) {
+    if (Array.isArray(snapshots)) archive.users[steamId] = encodeSnapshots(snapshots);
+  }
+  return archive;
+}
+
+const snapshotSignature = (list) => `${list.length}:${list.map(s => s.timestamp).join(',')}`;
 
 const app = express();
 const PORT = 3001;
@@ -106,11 +236,30 @@ app.use(helmet({
       // asset-hash path (see /api/steam/artwork-fallback below) rather than
       // the flat cdn.* path — all of those need to be whitelisted or the
       // browser silently drops the image in the packaged build.
+      // ACHIEVEMENT icons are a fourth family living somewhere else again.
+      // GetSchemaForGame hands back absolute URLs on steamcdn-a.akamaihd.net
+      // — a legacy host that is NOT one of the cdn.*.steamstatic edges above
+      // — so every achievement icon in the app (the Calendar's day detail,
+      // the rarity list, the achievement detail panel) rendered blank in any
+      // build this server serves. Dev goes through Vite on :5173, which
+      // applies no CSP at all, which is exactly why it went unnoticed for so
+      // long: the same shape of trap as the Google-Fonts CSP bug in 1.2.1.
+      //
+      // Verified by fetching one icon path per host: steamcdn-a.akamaihd.net,
+      // media.steampowered.com and cdn.cloudflare.steamstatic.com all return
+      // image/jpeg; the community.*.steamstatic edges return an HTML 404 for
+      // it and are deliberately NOT listed, despite serving other community
+      // assets. If icons go blank again, check the console for a CSP refusal
+      // before touching the components — and check
+      // navigator.serviceWorker.controller too, since a stale worker
+      // reproduces the identical symptom for a completely different reason
+      // (see the sw.js notes in CLAUDE.md).
       imgSrc: [
         "'self'", "data:",
         "https://cdn.akamai.steamstatic.com", "https://cdn.cloudflare.steamstatic.com", "https://cdn.fastly.steamstatic.com",
         "https://shared.akamai.steamstatic.com", "https://shared.cloudflare.steamstatic.com", "https://shared.fastly.steamstatic.com",
         "https://avatars.steamstatic.com", "https://avatars.akamai.steamstatic.com", "https://avatars.cloudflare.steamstatic.com", "https://avatars.fastly.steamstatic.com",
+        "https://steamcdn-a.akamaihd.net", "https://media.steampowered.com",
       ],
       connectSrc: ["'self'"],
       fontSrc: ["'self'", "data:"],
@@ -131,6 +280,17 @@ app.use(cors({
     'http://steamstats.localhost:5173', 'http://steamstats.localhost:3001',
   ],
 }));
+// Snapshot posts are the one genuinely large body this server takes: a single
+// snapshot is ~18KB for a 311-game library, and the client posts its whole
+// 90-day window at once, so a real payload is 1.5MB+ and a 2,000-game library
+// pushes 10MB. express.json()'s 100kb default silently 413'd anything past
+// about five snapshots — and saveSnapshot fire-and-forgets the POST, so the
+// archive just stopped receiving updates a few days in with nothing logged.
+// Mounted before the global parser: express.json() no-ops once a body has
+// already been parsed, so this wins for /api/snapshots without loosening the
+// limit for every other route. Safe here specifically because the server binds
+// to 127.0.0.1 for a single local user (see the SECURITY MIDDLEWARE note).
+app.use('/api/snapshots', express.json({ limit: '64mb' }));
 app.use(express.json());
 
 // Catches anything that slips past individual route try/catches so the
@@ -1108,24 +1268,102 @@ app.delete('/api/user-config', (req, res) => {
   res.json({ cleared: true });
 });
 
+// `?limit=N` returns the most recent N. The client asks for its retention
+// window rather than the whole archive, which can span years — the archive is
+// the durable record, localStorage is only ever the working set.
 app.get('/api/snapshots/:steamId', (req, res) => {
-  const all = readJsonFile(SNAPSHOTS_FILE, {});
-  res.json({ snapshots: all[req.params.steamId] || [] });
+  const archive = readSnapshotArchive();
+  const all = decodeSnapshots(archive.users[req.params.steamId]);
+  const limit = Number(req.query.limit);
+  const snapshots = Number.isFinite(limit) && limit > 0 ? all.slice(-limit) : all;
+  res.json({ snapshots, total: all.length });
 });
 
+// Per-day playtime for the WHOLE archive, however far back it goes.
+//
+// The Calendar can't get deep history from localStorage: that's a 90-day
+// working set, capped by quota, and reconstituting full snapshots for years
+// would be tens of megabytes over the wire. The archive already stores
+// per-day changes, so this walks it once and emits exactly the diff the
+// calendar needs — a few hundred bytes a day rather than ~18KB.
+//
+// Deliberately NOT included here: anything about what a day MEANS. No
+// tri-state, no gap spans, no day-boundary maths. `from`/`to` go out as raw
+// timestamps and steam.js decides — its rules are timezone-sensitive and are
+// the actual design intent of the feature, so they get exactly one
+// implementation rather than one here and one in the client that drift.
+app.get('/api/snapshots/:steamId/daily', (req, res) => {
+  const archive = readSnapshotArchive();
+  const entry = archive.users[req.params.steamId];
+  if (!entry || !entry.base) return res.json({ records: [], firstTracked: null, lastTracked: null });
+
+  const state = new Map((entry.base.games || []).map(g => [g.appid, g.playtime_forever || 0]));
+  let prevTs = entry.base.timestamp;
+  const records = [];
+
+  for (const d of (entry.deltas || [])) {
+    const games = [];
+    let minutes = 0;
+    for (const g of (d.changed || [])) {
+      const before = state.get(g.appid);
+      const delta = (g.playtime_forever || 0) - (before || 0);
+      if (delta > 0) {
+        // Matches the local path's rule exactly: only claim a first play when
+        // the game was already being watched sitting at zero.
+        games.push({ appid: g.appid, minutes: delta, isFirstPlay: before === 0 });
+        minutes += delta;
+      }
+      state.set(g.appid, g.playtime_forever || 0);
+    }
+    for (const id of (d.removed || [])) state.delete(id);
+    games.sort((a, b) => b.minutes - a.minutes);
+    records.push({ from: prevTs, to: d.timestamp, minutes, games });
+    prevTs = d.timestamp;
+  }
+
+  res.json({ records, firstTracked: entry.base.timestamp, lastTracked: prevTs });
+});
+
+// Cheap enough to poll for a UI badge — decodes but never serialises back.
+app.get('/api/snapshots/:steamId/stats', (req, res) => {
+  const archive = readSnapshotArchive();
+  const all = decodeSnapshots(archive.users[req.params.steamId]);
+  let bytes = 0;
+  try { bytes = fs.existsSync(SNAPSHOTS_FILE) ? fs.statSync(SNAPSHOTS_FILE).size : 0; } catch {}
+  res.json({
+    total: all.length,
+    first: all[0]?.timestamp ?? null,
+    last: all[all.length - 1]?.timestamp ?? null,
+    bytes,
+  });
+});
+
+// MERGES rather than replaces. The client only ever posts its retention
+// window, so an overwrite here would silently truncate the archive to 90 days
+// — which is exactly the data loss this file is supposed to prevent.
 app.post('/api/snapshots/:steamId', (req, res) => {
   const { snapshots } = req.body;
   if (!Array.isArray(snapshots)) return res.status(400).json({ error: 'snapshots array required' });
-  const all = readJsonFile(SNAPSHOTS_FILE, {});
-  all[req.params.steamId] = snapshots;
-  writeJsonFile(SNAPSHOTS_FILE, all);
-  res.json({ saved: true });
+
+  const archive = readSnapshotArchive();
+  const existing = decodeSnapshots(archive.users[req.params.steamId]);
+  const merged = dedupeSnapshotsByDay([...existing, ...snapshots]);
+
+  // Repeated app opens on the same day post identical history. Skipping the
+  // write keeps the cost of launching flat as the archive grows.
+  if (snapshotSignature(merged) === snapshotSignature(existing)) {
+    return res.json({ saved: false, unchanged: true, total: existing.length });
+  }
+
+  archive.users[req.params.steamId] = encodeSnapshots(merged);
+  writeJsonFile(SNAPSHOTS_FILE, archive, { pretty: false });
+  res.json({ saved: true, total: merged.length, added: merged.length - existing.length });
 });
 
 app.delete('/api/snapshots/:steamId', (req, res) => {
-  const all = readJsonFile(SNAPSHOTS_FILE, {});
-  delete all[req.params.steamId];
-  writeJsonFile(SNAPSHOTS_FILE, all);
+  const archive = readSnapshotArchive();
+  delete archive.users[req.params.steamId];
+  writeJsonFile(SNAPSHOTS_FILE, archive, { pretty: false });
   res.json({ cleared: true });
 });
 

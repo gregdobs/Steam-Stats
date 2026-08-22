@@ -4,6 +4,7 @@ import SetupScreen from './components/SetupScreen.jsx';
 import AuraBackground from './components/AuraBackground.jsx';
 import GlassTilt from './components/GlassTilt.jsx';
 import Dashboard from './pages/Dashboard.jsx';
+import Calendar from './pages/Calendar.jsx';
 import Library from './pages/Library.jsx';
 import Progress from './pages/Progress.jsx';
 import Achievements from './pages/Achievements.jsx';
@@ -47,6 +48,7 @@ function PageContent() {
   const { activePage } = useApp();
   switch (activePage) {
     case 'dashboard': return <Dashboard />;
+    case 'calendar': return <Calendar />;
     case 'library': return <Library />;
     case 'progress': return <Progress />;
     case 'achievements': return <Achievements />;

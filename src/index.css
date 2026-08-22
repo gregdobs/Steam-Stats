@@ -135,7 +135,7 @@ a:hover{color:var(--ss-accent-txt);}
   --ss-sheet: linear-gradient(165deg,rgba(24,29,38,.86),rgba(10,13,19,.92));
   --ss-aura-1: rgba(64,142,255,.28); --ss-aura-2: rgba(150,108,255,.22); --ss-aura-3: rgba(52,214,190,.14);
   --ss-grain: .5; --ss-sat: 155%; --ss-btn: rgba(255,255,255,.07); --ss-btn-hi: rgba(255,255,255,.14); --ss-inset: rgba(0,0,0,.28);
-  --ss-chart-rgb: 111,200,247; --ss-chart-ghost: rgba(111,200,247,.22); --ss-chart-glow: rgba(111,200,247,.55);
+  --ss-chart-rgb: 111,200,247; --ss-cat-2-rgb: 183,155,245; --ss-chart-ghost: rgba(111,200,247,.22); --ss-chart-glow: rgba(111,200,247,.55);
   --ss-chart-grad: linear-gradient(90deg,#8fd6ff,#b79bf5); --ss-chart-band: linear-gradient(160deg,#9fdcff,#6fc8f7); --ss-chart-fill: rgba(111,200,247,.5); --ss-chart-hi: #9fdcff; --ss-chart-alt: linear-gradient(90deg,#b79bf5,#6fc8f7);
   --ss-scrim: linear-gradient(120deg,rgba(6,8,12,.55),rgba(6,8,12,.86)); --ss-art-opacity: .22;
   --ss-pill-bg: rgba(111,200,247,.13); --ss-pill-line: rgba(111,200,247,.28); --ss-pill-ink: #a5dcfb;
@@ -158,7 +158,7 @@ a:hover{color:var(--ss-accent-txt);}
   --ss-sheet: linear-gradient(165deg,rgba(255,255,255,.92),rgba(232,239,247,.95));
   --ss-aura-1: rgba(64,142,255,.3); --ss-aura-2: rgba(150,108,255,.22); --ss-aura-3: rgba(52,214,190,.2);
   --ss-grain: .25; --ss-sat: 140%; --ss-btn: rgba(16,26,44,.055); --ss-btn-hi: rgba(16,26,44,.11); --ss-inset: rgba(255,255,255,.62);
-  --ss-chart-rgb: 226,116,42; --ss-chart-ghost: rgba(226,116,42,.2); --ss-chart-glow: rgba(226,116,42,.45);
+  --ss-chart-rgb: 226,116,42; --ss-cat-2-rgb: 124,92,214; --ss-chart-ghost: rgba(226,116,42,.2); --ss-chart-glow: rgba(226,116,42,.45);
   --ss-chart-grad: linear-gradient(90deg,#f0913c,#d9541f); --ss-chart-band: linear-gradient(160deg,#f5ac5c,#e2742a); --ss-chart-fill: rgba(226,116,42,.55); --ss-chart-hi: #d9541f; --ss-chart-alt: linear-gradient(90deg,#c2571a,#f0913c);
   --ss-scrim: linear-gradient(120deg,rgba(255,255,255,.82),rgba(248,251,255,.93)); --ss-art-opacity: .16;
   --ss-pill-bg: rgba(226,116,42,.12); --ss-pill-line: rgba(194,87,26,.32); --ss-pill-ink: #a04a12;
@@ -181,7 +181,7 @@ a:hover{color:var(--ss-accent-txt);}
   --ss-sheet: linear-gradient(165deg,rgba(22,30,46,.6),rgba(8,11,18,.74));
   --ss-aura-1: rgba(64,142,255,.42); --ss-aura-2: rgba(150,108,255,.34); --ss-aura-3: rgba(52,214,190,.22);
   --ss-grain: .7; --ss-sat: 175%; --ss-btn: rgba(255,255,255,.05); --ss-btn-hi: rgba(255,255,255,.11); --ss-inset: rgba(0,0,0,.2);
-  --ss-chart-rgb: 159,220,255; --ss-chart-ghost: rgba(159,220,255,.2); --ss-chart-glow: rgba(159,220,255,.6);
+  --ss-chart-rgb: 159,220,255; --ss-cat-2-rgb: 183,155,245; --ss-chart-ghost: rgba(159,220,255,.2); --ss-chart-glow: rgba(159,220,255,.6);
   --ss-chart-grad: linear-gradient(90deg,#bfe8ff,#b79bf5); --ss-chart-band: linear-gradient(160deg,#d4f0ff,#9fdcff); --ss-chart-fill: rgba(159,220,255,.45); --ss-chart-hi: #d4f0ff; --ss-chart-alt: linear-gradient(90deg,#b79bf5,#9fdcff);
   --ss-scrim: linear-gradient(120deg,rgba(5,7,16,.42),rgba(5,7,16,.72)); --ss-art-opacity: .28;
   --ss-pill-bg: rgba(159,220,255,.12); --ss-pill-line: rgba(159,220,255,.26); --ss-pill-ink: #bfe8ff;
@@ -205,7 +205,7 @@ a:hover{color:var(--ss-accent-txt);}
   --ss-sheet: linear-gradient(165deg,rgba(18,23,32,.99),rgba(9,12,18,.99));
   --ss-aura-1: rgba(64,142,255,.14); --ss-aura-2: rgba(150,108,255,.1); --ss-aura-3: rgba(52,214,190,.07);
   --ss-grain: 0; --ss-sat: 110%; --ss-btn: rgba(255,255,255,.10); --ss-btn-hi: rgba(255,255,255,.18); --ss-inset: rgba(0,0,0,.5);
-  --ss-chart-rgb: 143,214,255; --ss-chart-ghost: rgba(143,214,255,.22); --ss-chart-glow: rgba(143,214,255,.5);
+  --ss-chart-rgb: 143,214,255; --ss-cat-2-rgb: 183,155,245; --ss-chart-ghost: rgba(143,214,255,.22); --ss-chart-glow: rgba(143,214,255,.5);
   --ss-chart-grad: linear-gradient(90deg,#8fd6ff,#b79bf5); --ss-chart-band: linear-gradient(160deg,#bfe8ff,#8fd6ff); --ss-chart-fill: rgba(143,214,255,.55); --ss-chart-hi: #bfe8ff; --ss-chart-alt: linear-gradient(90deg,#b79bf5,#8fd6ff);
   --ss-scrim: linear-gradient(120deg,rgba(4,6,10,.86),rgba(4,6,10,.95)); --ss-art-opacity: .14;
   --ss-pill-bg: rgba(143,214,255,.14); --ss-pill-line: rgba(143,214,255,.32); --ss-pill-ink: #bfe8ff;

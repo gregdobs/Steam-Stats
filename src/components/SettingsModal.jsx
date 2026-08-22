@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp, HLTB_CACHE_KEY, ACH_CACHE_KEY } from '../hooks/useAppContext.jsx';
 import { saveConfig, formatHours, formatLastPlayed, clearServerMirrors,
-  loadSteamLinkPref, saveSteamLinkPref, shouldUseSteamApp } from '../utils/steam.js';
+  loadSteamLinkPref, saveSteamLinkPref, shouldUseSteamApp,
+  buildSnapshotBackup, applySnapshotBackup } from '../utils/steam.js';
 import useFocusTrap from '../hooks/useFocusTrap.js';
 import { GameHeader } from './GameImage.jsx';
 import GameDetailPanel from './GameDetailPanel.jsx';
@@ -932,6 +933,9 @@ function DataSettings() {
   const [dataFolder, setDataFolder] = useState('');
   const [cacheCounts, setCacheCounts] = useState(null);
   const [clearingCache, setClearingCache] = useState(false);
+  const [backupBusy, setBackupBusy] = useState('');
+  const [backupNote, setBackupNote] = useState('');
+  const importInputRef = useRef(null);
 
   useEffect(() => {
     try {
@@ -986,6 +990,51 @@ function DataSettings() {
     refreshCacheCounts();
   };
 
+  // Export pulls the ARCHIVE, not the 90-day local window, so a backup taken
+  // after years of use carries all of it. The archive is the durable copy;
+  // localStorage is only ever a working set.
+  const exportSnapshots = async () => {
+    setBackupBusy('export'); setBackupNote('');
+    try {
+      const backup = await buildSnapshotBackup(steamId);
+      const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `steam-stats-snapshots-${steamId}-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setBackupNote(`Exported ${backup.snapshotCount} snapshot${backup.snapshotCount === 1 ? '' : 's'}.`);
+    } catch (e) {
+      setBackupNote(`Export failed: ${e.message}`);
+    }
+    setBackupBusy('');
+  };
+
+  const importSnapshots = async (file) => {
+    if (!file) return;
+    setBackupBusy('import'); setBackupNote('');
+    try {
+      const payload = JSON.parse(await file.text());
+      const result = await applySnapshotBackup(payload);
+      try {
+        const all = JSON.parse(localStorage.getItem('steam_dashboard_snapshots') || '{}');
+        setSnapshots(all[steamId] || []);
+      } catch {}
+      setBackupNote(
+        result.added > 0
+          ? `Restored ${result.added} snapshot${result.added === 1 ? '' : 's'} — ${result.total} on record now.`
+          : `Nothing new to restore — all ${result.total} were already here.`
+        + (result.steamId !== steamId ? ` (Backup was for a different Steam ID: ${result.steamId}.)` : '')
+      );
+    } catch (e) {
+      setBackupNote(e.message || 'Import failed.');
+    }
+    setBackupBusy('');
+  };
+
   const clearSnapshots = async () => {
     try {
       const all = JSON.parse(localStorage.getItem('steam_dashboard_snapshots') || '{}');
@@ -1028,6 +1077,31 @@ function DataSettings() {
       {showLog && (
         <div style={{ padding: '4px 20px 12px', borderBottom: '1px solid var(--ss-line-soft)' }}>
           <SnapshotTimeline snapshots={snapshots} />
+        </div>
+      )}
+      <Row
+        label="Backup Snapshots"
+        description="Playtime history can't be re-fetched — Steam only reports lifetime totals, so a day that wasn't recorded is gone. Export writes the full archive to a file; import merges one back in and can only add days, never remove them."
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button className="btn btn-ghost" onClick={exportSnapshots} disabled={!steamId || backupBusy === 'export'} style={{ fontSize: 12, padding: '4px 10px' }}>
+            {backupBusy === 'export' ? 'Exporting…' : 'Export'}
+          </button>
+          <button className="btn btn-ghost" onClick={() => importInputRef.current?.click()} disabled={backupBusy === 'import'} style={{ fontSize: 12, padding: '4px 10px' }}>
+            {backupBusy === 'import' ? 'Importing…' : 'Import'}
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: 'none' }}
+            onChange={e => { importSnapshots(e.target.files?.[0]); e.target.value = ''; }}
+          />
+        </div>
+      </Row>
+      {backupNote && (
+        <div style={{ padding: '0 20px 12px', fontSize: 12, color: 'var(--ss-ink2)', borderBottom: '1px solid var(--ss-line-soft)' }}>
+          {backupNote}
         </div>
       )}
       <Row label="Regenerable Caches" description="Genre tags, achievement rarity %, and HowLongToBeat lookups. Safe to clear — just re-fetched as needed, which can take a few minutes for a large library.">
